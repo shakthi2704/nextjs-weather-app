@@ -1,465 +1,464 @@
+// src/app/(protected)/dashboard/favorites/page.tsx
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
+import { useState, useEffect } from "react"
+import type { CurrentWeather } from "@/types"
 
-// ── Data ───────────────────────────────────────
-const INITIAL_FAVORITES = [
-  {
-    id: 1,
-    name: "Negombo",
-    country: "Sri Lanka",
-    code: "LK",
-    icon: "⛅",
-    temp: 34,
-    high: 36,
-    low: 24,
-    condition: "Partly Cloudy",
-    humidity: 72,
-    wind: 18,
-    rain: 40,
-    uv: 7,
-    aqi: 42,
-  },
-  {
-    id: 2,
-    name: "Colombo",
-    country: "Sri Lanka",
-    code: "LK",
-    icon: "🌤️",
-    temp: 33,
-    high: 35,
-    low: 23,
-    condition: "Mostly Sunny",
-    humidity: 65,
-    wind: 14,
-    rain: 20,
-    uv: 8,
-    aqi: 55,
-  },
-  {
-    id: 3,
-    name: "Kandy",
-    country: "Sri Lanka",
-    code: "LK",
-    icon: "🌦️",
-    temp: 28,
-    high: 30,
-    low: 20,
-    condition: "Light Rain",
-    humidity: 82,
-    wind: 22,
-    rain: 60,
-    uv: 3,
-    aqi: 38,
-  },
-  {
-    id: 4,
-    name: "Galle",
-    country: "Sri Lanka",
-    code: "LK",
-    icon: "⛅",
-    temp: 31,
-    high: 33,
-    low: 22,
-    condition: "Partly Cloudy",
-    humidity: 74,
-    wind: 16,
-    rain: 30,
-    uv: 6,
-    aqi: 44,
-  },
-  {
-    id: 5,
-    name: "Tokyo",
-    country: "Japan",
-    code: "JP",
-    icon: "🌤️",
-    temp: 14,
-    high: 16,
-    low: 8,
-    condition: "Mostly Sunny",
-    humidity: 48,
-    wind: 20,
-    rain: 10,
-    uv: 4,
-    aqi: 62,
-  },
-  {
-    id: 6,
-    name: "London",
-    country: "UK",
-    code: "GB",
-    icon: "🌧️",
-    temp: 9,
-    high: 11,
-    low: 5,
-    condition: "Rain",
-    humidity: 88,
-    wind: 28,
-    rain: 80,
-    uv: 1,
-    aqi: 48,
-  },
-  {
-    id: 7,
-    name: "New York",
-    country: "USA",
-    code: "US",
-    icon: "☀️",
-    temp: 18,
-    high: 20,
-    low: 10,
-    condition: "Sunny",
-    humidity: 52,
-    wind: 15,
-    rain: 5,
-    uv: 6,
-    aqi: 71,
-  },
-  {
-    id: 8,
-    name: "Dubai",
-    country: "UAE",
-    code: "AE",
-    icon: "☀️",
-    temp: 38,
-    high: 40,
-    low: 28,
-    condition: "Sunny",
-    humidity: 38,
-    wind: 12,
-    rain: 0,
-    uv: 10,
-    aqi: 35,
-  },
-]
+interface Favorite {
+  id: string
+  cityName: string
+  country: string
+  lat: number
+  lon: number
+  timezone: string | null
+}
 
+interface FavoriteWithWeather extends Favorite {
+  weather?: CurrentWeather
+  loading: boolean
+  error: boolean
+}
+
+// ── Suggested cities to add ────────────────────
 const SUGGESTIONS = [
-  { name: "Singapore", country: "Singapore", code: "SG", icon: "🌦️", temp: 30 },
-  { name: "Sydney", country: "Australia", code: "AU", icon: "☀️", temp: 24 },
-  { name: "Paris", country: "France", code: "FR", icon: "⛅", temp: 12 },
-  { name: "Mumbai", country: "India", code: "IN", icon: "🌤️", temp: 36 },
+  { cityName: "London", country: "UK", lat: 51.51, lon: -0.13 },
+  { cityName: "New York", country: "US", lat: 40.71, lon: -74.01 },
+  { cityName: "Tokyo", country: "Japan", lat: 35.68, lon: 139.69 },
+  { cityName: "Dubai", country: "UAE", lat: 25.2, lon: 55.27 },
+  { cityName: "Sydney", country: "Australia", lat: -33.87, lon: 151.21 },
+  { cityName: "Paris", country: "France", lat: 48.85, lon: 2.35 },
+  { cityName: "Singapore", country: "Singapore", lat: 1.35, lon: 103.82 },
+  { cityName: "Mumbai", country: "India", lat: 19.08, lon: 72.88 },
 ]
 
-const getAqiLabel = (aqi: number) =>
+const getAqiColor = (aqi: number) =>
   aqi <= 50
-    ? {
-        label: "Good",
-        color: "text-green-400",
-        bg: "bg-green-500/10 border-green-500/20",
-      }
+    ? "#22c55e"
     : aqi <= 100
-      ? {
-          label: "Moderate",
-          color: "text-yellow-400",
-          bg: "bg-yellow-500/10 border-yellow-500/20",
-        }
-      : {
-          label: "Unhealthy",
-          color: "text-orange-400",
-          bg: "bg-orange-500/10 border-orange-500/20",
-        }
+      ? "#eab308"
+      : aqi <= 150
+        ? "#f97316"
+        : "#ef4444"
 
-// ── Page ───────────────────────────────────────
+// ── Skeleton ───────────────────────────────────
+const Skeleton = ({ className = "" }: { className?: string }) => (
+  <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} />
+)
+
 export default function FavoritesPage() {
-  const [favorites, setFavorites] = useState(INITIAL_FAVORITES)
-  const [search, setSearch] = useState("")
+  const [favorites, setFavorites] = useState<FavoriteWithWeather[]>([])
+  const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"grid" | "list">("grid")
+  const [adding, setAdding] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
 
-  const removeFavorite = (id: number) =>
-    setFavorites((prev) => prev.filter((f) => f.id !== id))
+  // ── Load favorites from DB ─────────────────
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/favorites")
+        const data = await res.json()
+        const favs: FavoriteWithWeather[] = data.map((f: Favorite) => ({
+          ...f,
+          loading: true,
+          error: false,
+        }))
+        setFavorites(favs)
 
-  const filtered = favorites.filter(
-    (f) =>
-      f.name.toLowerCase().includes(search.toLowerCase()) ||
-      f.country.toLowerCase().includes(search.toLowerCase()),
+        // Fetch weather for each favorite in parallel
+        favs.forEach(async (fav) => {
+          try {
+            const params = new URLSearchParams({
+              lat: String(fav.lat),
+              lon: String(fav.lon),
+              city: fav.cityName,
+              country: fav.country,
+              timezone: fav.timezone ?? "auto",
+            })
+            const wRes = await fetch(`/api/weather?${params}`)
+            const wData = await wRes.json()
+
+            setFavorites((prev) =>
+              prev.map((f) =>
+                f.id === fav.id
+                  ? { ...f, weather: wData.current, loading: false }
+                  : f,
+              ),
+            )
+          } catch {
+            setFavorites((prev) =>
+              prev.map((f) =>
+                f.id === fav.id ? { ...f, loading: false, error: true } : f,
+              ),
+            )
+          }
+        })
+      } catch {
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // ── Add favorite ───────────────────────────
+  const addFavorite = async (city: (typeof SUGGESTIONS)[0]) => {
+    setAdding(city.cityName)
+    try {
+      const res = await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(city),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(data.error ?? "Failed to add favorite")
+        return
+      }
+
+      const newFav: FavoriteWithWeather = {
+        ...data,
+        loading: true,
+        error: false,
+      }
+      setFavorites((prev) => [...prev, newFav])
+
+      // Fetch its weather
+      const params = new URLSearchParams({
+        lat: String(city.lat),
+        lon: String(city.lon),
+        city: city.cityName,
+        country: city.country,
+        timezone: "auto",
+      })
+      const wRes = await fetch(`/api/weather?${params}`)
+      const wData = await wRes.json()
+      setFavorites((prev) =>
+        prev.map((f) =>
+          f.id === data.id
+            ? { ...f, weather: wData.current, loading: false }
+            : f,
+        ),
+      )
+    } catch {
+      alert("Failed to add favorite")
+    } finally {
+      setAdding(null)
+    }
+  }
+
+  // ── Remove favorite ────────────────────────
+  // const removeFavorite = async (id: string) => {
+  //   const res = await fetch(`/api/favorites?id=${id}`, { method: "DELETE" })
+  //   if (res.ok) {
+  //     setFavorites((prev) => prev.filter((f) => f.id !== id))
+  //   }
+  // }
+
+  const removeFavorite = async (id: string, cityName: string) => {
+    if (!confirm(`Remove ${cityName} from favourites?`)) return
+
+    const res = await fetch(`/api/favorites?id=${id}`, { method: "DELETE" })
+    if (res.ok) {
+      setFavorites((prev) => prev.filter((f) => f.id !== id))
+    }
+  }
+
+  const savedNames = favorites.map((f) => f.cityName)
+  const filteredSuggestions = SUGGESTIONS.filter(
+    (s) =>
+      !savedNames.includes(s.cityName) &&
+      (search === "" ||
+        s.cityName.toLowerCase().includes(search.toLowerCase())),
   )
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Header row ────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        {/* Search */}
-        <div
-          className="flex items-center gap-2 px-3 py-2.5 rounded-xl flex-1 max-w-xs"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <span className="text-slate-500 text-sm">🔍</span>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search favourites…"
-            className="flex-1 bg-transparent text-xs text-slate-300 placeholder-slate-600 outline-none"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="text-slate-500 hover:text-slate-300 text-xs"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div
-            className="flex rounded-xl overflow-hidden"
-            style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+      {/* ── Header ────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1
+            className="text-xl font-bold text-slate-100"
+            style={{ fontFamily: "var(--font-d)" }}
           >
-            {(["grid", "list"] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`px-3 py-2 text-xs font-semibold transition-colors
-                            ${
-                              view === v
-                                ? "bg-blue-500/20 text-blue-400"
-                                : "bg-transparent text-slate-500 hover:text-slate-300"
-                            }`}
-              >
-                {v === "grid" ? "⊞ Grid" : "☰ List"}
-              </button>
-            ))}
+            Favourite Locations
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {favorites.length} saved{" "}
+            {favorites.length === 1 ? "city" : "cities"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <span className="text-slate-500">🔍</span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search cities…"
+              className="bg-transparent text-slate-300 placeholder-slate-600 outline-none text-sm w-32"
+            />
           </div>
-
-          <span className="text-xs text-slate-500">
-            {favorites.length} saved
-          </span>
+          {/* View toggle */}
+          {["grid", "list"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v as "grid" | "list")}
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
+              style={{
+                background:
+                  view === v
+                    ? "rgba(59,130,246,0.15)"
+                    : "rgba(255,255,255,0.04)",
+                border:
+                  view === v
+                    ? "1px solid rgba(59,130,246,0.35)"
+                    : "1px solid rgba(255,255,255,0.08)",
+                color: view === v ? "#60a5fa" : "#64748b",
+              }}
+            >
+              {v === "grid" ? "⊞ Grid" : "☰ List"}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Favourites grid / list ────────────── */}
-      {filtered.length === 0 ? (
+      {/* ── Empty state ────────────────────────── */}
+      {!loading && favorites.length === 0 && (
         <div
-          className="flex flex-col items-center justify-center py-20 rounded-2xl"
+          className="flex flex-col items-center justify-center py-16 gap-3 rounded-2xl"
           style={{
             background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px dashed rgba(255,255,255,0.08)",
           }}
         >
-          <p className="text-4xl mb-3">🔍</p>
-          <p className="text-slate-400 text-sm font-semibold">
-            No results for "{search}"
-          </p>
-          <p className="text-slate-600 text-xs mt-1">
-            Try a different city or country name
+          <p className="text-4xl">⭐</p>
+          <p className="text-slate-300 font-semibold">No favourites yet</p>
+          <p className="text-slate-500 text-sm">
+            Add cities below to track their weather
           </p>
         </div>
-      ) : view === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {filtered.map((fav) => {
-            const aqi = getAqiLabel(fav.aqi)
-            return (
-              <div
-                key={fav.id}
-                className="group relative rounded-2xl p-5 transition-all duration-200
-                           hover:-translate-y-0.5"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.07)",
-                }}
+      )}
+
+      {/* ── Grid view ─────────────────────────── */}
+      {view === "grid" && favorites.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {favorites.map((fav) => (
+            <div
+              key={fav.id}
+              className="group relative rounded-2xl p-5 transition-all duration-200"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              {/* Remove button */}
+              <button
+                onClick={() => removeFavorite(fav.id, fav.cityName)}
+                className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center
+                           text-slate-600 hover:text-red-600 hover:bg-red-500/10 transition-all
+                           opacity-0 group-hover:opacity-100 text-xs"
               >
-                {/* Remove button */}
-                <button
-                  onClick={() => removeFavorite(fav.id)}
-                  className="absolute top-3 right-3 w-6 h-6 rounded-lg flex items-center justify-center
-                             text-slate-600 hover:text-red-400 hover:bg-red-500/10
-                             opacity-0 group-hover:opacity-100 transition-all text-xs"
-                >
-                  ✕
-                </button>
+                ✕
+              </button>
 
-                {/* Location */}
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p
-                      className="text-sm font-bold text-slate-100"
-                      style={{ fontFamily: "var(--font-d)" }}
-                    >
-                      {fav.name}
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      {fav.country}
-                    </p>
-                  </div>
-                  <span className="text-3xl">{fav.icon}</span>
+              {fav.loading ? (
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-10 w-16" />
+                  <Skeleton className="h-3 w-32" />
                 </div>
-
-                {/* Temp */}
-                <div className="flex items-end gap-2 mb-3">
-                  <span
-                    className="font-extrabold text-slate-100 leading-none"
-                    style={{
-                      fontFamily: "var(--font-d)",
-                      fontSize: 44,
-                      letterSpacing: -2,
-                    }}
-                  >
-                    {fav.temp}°
-                  </span>
-                  <div className="pb-1.5">
-                    <p className="text-[10px] text-slate-500 leading-none">
-                      {fav.condition}
-                    </p>
-                    <div className="flex gap-1.5 mt-1">
-                      <span className="text-[10px] text-red-400">
-                        ↑{fav.high}°
-                      </span>
-                      <span className="text-[10px] text-blue-400">
-                        ↓{fav.low}°
-                      </span>
+              ) : fav.error ? (
+                <div className="text-center py-4">
+                  <p className="text-slate-500 text-xs">Failed to load</p>
+                  <p className="text-lg mt-1">⚠️</p>
+                </div>
+              ) : fav.weather ? (
+                <>
+                  <div className="flex items-start justify-between mt-6">
+                    <div>
+                      <p
+                        className="text-sm font-bold text-slate-100"
+                        style={{ fontFamily: "var(--font-d)" }}
+                      >
+                        {fav.cityName}
+                      </p>
+                      <p className="text-xs text-slate-500">{fav.country}</p>
                     </div>
+                    <span className="text-3xl">
+                      {fav.weather.conditionIcon}
+                    </span>
                   </div>
-                </div>
 
-                {/* Stats strip */}
-                <div className="flex gap-2 mb-3">
-                  {[
-                    { icon: "💧", v: `${fav.rain}%` },
-                    { icon: "💨", v: `${fav.wind}km/h` },
-                    { icon: "💦", v: `${fav.humidity}%` },
-                  ].map((s) => (
-                    <div
-                      key={s.icon}
-                      className="flex-1 flex flex-col items-center py-1.5 rounded-lg"
-                      style={{
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.06)",
-                      }}
+                  <p
+                    className="text-4xl font-black text-slate-100 mb-1"
+                    style={{ fontFamily: "var(--font-d)", letterSpacing: -2 }}
+                  >
+                    {fav.weather.temp}°
+                  </p>
+                  <p className="text-xs text-slate-400 mb-4">
+                    {fav.weather.conditionText}
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { label: "Humidity", value: `${fav.weather.humidity}%` },
+                      { label: "Wind", value: `${fav.weather.windSpeed}km/h` },
+                      { label: "UV", value: `${fav.weather.uvIndex}` },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className="text-center px-1 py-1.5 rounded-lg"
+                        style={{ background: "rgba(255,255,255,0.04)" }}
+                      >
+                        <p className="text-[9px] text-slate-600">{s.label}</p>
+                        <p className="text-xs font-semibold text-slate-300 mt-0.5">
+                          {s.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    className="flex items-center justify-between mt-3 pt-3"
+                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+                  >
+                    <span className="text-xs text-slate-500">
+                      ↑ {fav.weather.tempMax}° ↓ {fav.weather.tempMin}°
+                    </span>
+                    <span
+                      className="text-xs font-semibold"
+                      style={{ color: getAqiColor(50) }}
                     >
-                      <span className="text-sm">{s.icon}</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{s.v}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* AQI badge + link */}
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border ${aqi.bg} ${aqi.color}`}
-                  >
-                    AQI {fav.aqi} · {aqi.label}
-                  </span>
-                  <Link
-                    href="/dashboard/forecast"
-                    className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    Forecast →
-                  </Link>
-                </div>
-              </div>
-            )
-          })}
+                      Feels {fav.weather.feelsLike}°
+                    </span>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ))}
         </div>
-      ) : (
-        /* List view */
+      )}
+
+      {/* ── List view ─────────────────────────── */}
+      {view === "list" && favorites.length > 0 && (
         <div
           className="rounded-2xl overflow-hidden"
           style={{ border: "1px solid rgba(255,255,255,0.07)" }}
         >
-          <table className="w-full">
+          <table className="w-full text-sm">
             <thead>
               <tr
                 style={{
                   background: "rgba(255,255,255,0.03)",
-                  borderBottom: "1px solid rgba(255,255,255,0.07)",
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
                 }}
               >
                 {[
-                  "Location",
+                  "City",
                   "Condition",
                   "Temp",
-                  "H / L",
-                  "Rain",
-                  "Wind",
+                  "Feels Like",
                   "Humidity",
-                  "AQI",
+                  "Wind",
+                  "UV",
                   "",
-                ].map((col) => (
+                ].map((h) => (
                   <th
-                    key={col}
-                    className="text-left text-[11px] font-semibold text-slate-500
-                                 uppercase tracking-wider px-4 py-3 whitespace-nowrap"
+                    key={h}
+                    className="text-left px-4 py-3 text-[10px] text-slate-500
+                                         uppercase tracking-wider font-semibold"
                   >
-                    {col}
+                    {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((fav, i) => {
-                const aqi = getAqiLabel(fav.aqi)
-                return (
-                  <tr
-                    key={fav.id}
-                    className="hover:bg-white/[0.02] transition-colors group"
-                    style={{
-                      borderBottom:
-                        i < filtered.length - 1
-                          ? "1px solid rgba(255,255,255,0.04)"
-                          : "none",
-                    }}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-bold text-slate-100">
-                        {fav.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500">
-                        {fav.country}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{fav.icon}</span>
-                        <p className="text-xs text-slate-400 hidden md:block">
-                          {fav.condition}
-                        </p>
+              {favorites.map((fav, i) => (
+                <tr
+                  key={fav.id}
+                  className="transition-colors hover:bg-white/[0.02]"
+                  style={{
+                    borderTop:
+                      i > 0 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                  }}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-100">
+                      {fav.cityName}
+                    </p>
+                    <p className="text-xs text-slate-500">{fav.country}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {fav.loading ? (
+                      <Skeleton className="h-4 w-20" />
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span>{fav.weather?.conditionIcon}</span>
+                        <span className="text-slate-400 text-xs">
+                          {fav.weather?.conditionText}
+                        </span>
                       </div>
-                    </td>
-                    <td
-                      className="px-4 py-3 text-sm font-bold text-slate-100"
-                      style={{ fontFamily: "var(--font-d)" }}
+                    )}
+                  </td>
+                  <td
+                    className="px-4 py-3 font-bold text-slate-100"
+                    style={{ fontFamily: "var(--font-d)" }}
+                  >
+                    {fav.loading ? (
+                      <Skeleton className="h-4 w-10" />
+                    ) : (
+                      `${fav.weather?.temp}°C`
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {fav.loading ? (
+                      <Skeleton className="h-4 w-10" />
+                    ) : (
+                      `${fav.weather?.feelsLike}°C`
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {fav.loading ? (
+                      <Skeleton className="h-4 w-10" />
+                    ) : (
+                      `${fav.weather?.humidity}%`
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {fav.loading ? (
+                      <Skeleton className="h-4 w-14" />
+                    ) : (
+                      `${fav.weather?.windSpeed} km/h`
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {fav.loading ? (
+                      <Skeleton className="h-4 w-8" />
+                    ) : (
+                      fav.weather?.uvIndex
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => removeFavorite(fav.id, fav.cityName)}
+                      className="text-slate-600 hover:text-red-400 transition-colors text-xs
+                                 px-2 py-1 rounded-lg hover:bg-red-500/10"
                     >
-                      {fav.temp}°C
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-red-400">↑{fav.high}°</span>
-                      <span className="text-xs text-slate-600 mx-1">/</span>
-                      <span className="text-xs text-blue-400">↓{fav.low}°</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">
-                      {fav.rain}%
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">
-                      {fav.wind} km/h
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">
-                      {fav.humidity}%
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border ${aqi.bg} ${aqi.color}`}
-                      >
-                        {fav.aqi} · {aqi.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => removeFavorite(fav.id)}
-                        className="text-slate-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -476,24 +475,37 @@ export default function FavoritesPage() {
         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mb-3">
           Suggested cities
         </p>
-        <div className="flex gap-2 flex-wrap">
-          {SUGGESTIONS.map((s) => (
+        <div className="flex flex-wrap gap-2">
+          {filteredSuggestions.map((city) => (
             <button
-              key={s.name}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs
-                         text-slate-400 hover:text-slate-200 transition-all duration-200
-                         hover:border-white/15"
+              key={city.cityName}
+              onClick={() => addFavorite(city)}
+              disabled={adding === city.cityName}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
+                         transition-all duration-200 disabled:opacity-50 disabled:cursor-wait"
               style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "#94a3b8",
               }}
             >
-              <span>{s.icon}</span>
-              <span>{s.name}</span>
-              <span className="text-slate-600">{s.temp}°</span>
-              <span className="text-blue-500 text-[10px] ml-1">+ Add</span>
+              {adding === city.cityName ? (
+                <span
+                  className="w-3 h-3 border border-blue-400/30 border-t-blue-400
+                                 rounded-full animate-spin"
+                />
+              ) : (
+                "＋"
+              )}
+              {city.cityName}
+              <span className="text-slate-600">{city.country}</span>
             </button>
           ))}
+          {filteredSuggestions.length === 0 && (
+            <p className="text-xs text-slate-600">
+              All suggested cities have been added!
+            </p>
+          )}
         </div>
       </div>
     </div>
