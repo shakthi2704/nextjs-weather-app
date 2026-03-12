@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { signOut } from "next-auth/react"
 
 // ── Page title map ─────────────────────────────
 const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
@@ -85,8 +86,8 @@ const NotificationDropdown = ({ onClose }: { onClose: () => void }) => (
         <div
           key={n.id}
           className={`flex items-start gap-3 px-4 py-3.5 transition-colors duration-150
-                      hover:bg-white/[0.03] cursor-pointer
-                      ${n.unread ? "bg-blue-500/[0.04]" : ""}`}
+                      hover:bg-white/3 cursor-pointer
+                      ${n.unread ? "bg-blue-500/4" : ""}`}
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
         >
           <span className="text-xl shrink-0 mt-0.5">{n.icon}</span>
@@ -163,7 +164,7 @@ const UserDropdown = ({ onClose }: { onClose: () => void }) => (
           href={item.href}
           onClick={onClose}
           className={`flex items-center gap-3 px-4 py-2.5 text-sm
-                      transition-colors duration-150 hover:bg-white/[0.04]
+                      transition-colors duration-150 hover:bg-white/4
                       ${item.accent ? "text-blue-400" : "text-slate-300 hover:text-slate-100"}`}
         >
           <span className="text-base">{item.icon}</span>
@@ -175,9 +176,9 @@ const UserDropdown = ({ onClose }: { onClose: () => void }) => (
     {/* Sign out */}
     <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
       <button
-        onClick={onClose}
+        onClick={() => signOut({ callbackUrl: "/login" })}
         className="w-full flex items-center gap-3 px-4 py-3 text-sm
-                   text-red-400 hover:text-red-300 hover:bg-red-500/[0.05]
+                   text-red-400 hover:text-red-300 hover:bg-red-500/5
                    transition-colors duration-150"
       >
         <span className="text-base">→</span>
@@ -272,7 +273,7 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
                           ${
                             showNotif
                               ? "bg-blue-500/15 text-blue-400"
-                              : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.06]"
+                              : "text-slate-400 hover:text-slate-100 hover:bg-white/6"
                           }`}
             >
               🔔

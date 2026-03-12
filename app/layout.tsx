@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next"
 import { Poppins, Inter } from "next/font/google"
 import "./globals.css"
+import { SessionProvider } from "next-auth/react"
+import { auth } from "@/lib/auth"
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -76,11 +78,12 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await auth()
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -92,7 +95,7 @@ export default function RootLayout({
     min-h-screen    
   `}
       >
-        {children}
+        <SessionProvider session={session}>{children}</SessionProvider>
       </body>
     </html>
   )

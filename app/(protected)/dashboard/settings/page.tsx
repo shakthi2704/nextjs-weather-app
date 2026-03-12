@@ -1,810 +1,771 @@
+// src/app/(protected)/dashboard/settings/page.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 
 // ── Types ──────────────────────────────────────
-type Section = "location" | "appearance" | "notifications" | "account"
+interface UserSettings {
+  tempUnit: string
+  windUnit: string
+  theme: string
+  language: string
+  defaultCity: string | null
+  defaultLat: number | null
+  defaultLon: number | null
+  notifications: boolean
+}
 
-// ── Nav sections ───────────────────────────────
-const SECTIONS: { id: Section; label: string; icon: string; desc: string }[] = [
-  {
-    id: "location",
-    label: "Default Location",
-    icon: "📍",
-    desc: "Home city and location detection",
-  },
-  {
-    id: "appearance",
-    label: "Theme & Appearance",
-    icon: "🎨",
-    desc: "Display, units, and language",
-  },
-  {
-    id: "notifications",
-    label: "Notifications",
-    icon: "🔔",
-    desc: "Alerts, warnings, and reminders",
-  },
-  {
-    id: "account",
-    label: "Account & Profile",
-    icon: "👤",
-    desc: "Personal info and security",
-  },
+interface UserData {
+  id: string
+  name: string | null
+  email: string
+  image: string | null
+  settings: UserSettings | null
+}
+
+interface CityResult {
+  name: string
+  country: string
+  lat: number
+  lon: number
+}
+
+// ── Options ────────────────────────────────────
+const TEMP_UNITS = [
+  { value: "C", label: "Celsius (°C)" },
+  { value: "F", label: "Fahrenheit (°F)" },
+]
+const WIND_UNITS = [
+  { value: "kmh", label: "km/h" },
+  { value: "mph", label: "mph" },
+  { value: "ms", label: "m/s" },
+]
+const THEMES = [
+  { value: "dark", label: "🌙 Dark" },
+  { value: "light", label: "☀️ Light" },
+  { value: "system", label: "💻 System" },
+]
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "fr", label: "Français" },
+  { value: "de", label: "Deutsch" },
+  { value: "ja", label: "日本語" },
+  { value: "zh", label: "中文" },
 ]
 
-const SAVED_LOCATIONS = [
-  { id: 1, name: "Negombo", country: "Sri Lanka", icon: "⛅", isDefault: true },
-  {
-    id: 2,
-    name: "Colombo",
-    country: "Sri Lanka",
-    icon: "🌤️",
-    isDefault: false,
-  },
-  { id: 3, name: "Kandy", country: "Sri Lanka", icon: "🌦️", isDefault: false },
+const NAV_ITEMS = [
+  { id: "location", icon: "📍", label: "Default Location" },
+  { id: "appearance", icon: "🎨", label: "Appearance" },
+  { id: "notifications", icon: "🔔", label: "Notifications" },
+  { id: "account", icon: "👤", label: "Account" },
 ]
 
-// ── Toggle component ───────────────────────────
-const Toggle = ({ on, onChange }: { on: boolean; onChange: () => void }) => (
-  <button
-    onClick={onChange}
-    className={`relative w-10 h-5 rounded-full transition-all duration-300 shrink-0
-                ${on ? "bg-blue-500" : "bg-white/10"}`}
-  >
-    <div
-      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white
-                  shadow transition-all duration-300
-                  ${on ? "left-5" : "left-0.5"}`}
-    />
-  </button>
+// ── Sub-components ─────────────────────────────
+const Skeleton = ({ className = "" }: { className?: string }) => (
+  <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} />
 )
 
-// ── Select component ───────────────────────────
 const Select = ({
   value,
-  options,
   onChange,
+  options,
 }: {
   value: string
-  options: { label: string; value: string }[]
   onChange: (v: string) => void
+  options: { value: string; label: string }[]
 }) => (
   <select
     value={value}
     onChange={(e) => onChange(e.target.value)}
-    className="text-xs text-slate-200 rounded-xl px-3 py-2 outline-none cursor-pointer"
+    className="px-3 py-2 rounded-xl text-sm text-slate-200 outline-none cursor-pointer transition-all"
     style={{
       background: "rgba(255,255,255,0.06)",
       border: "1px solid rgba(255,255,255,0.1)",
     }}
   >
     {options.map((o) => (
-      <option key={o.value} value={o.value} style={{ background: "#0a1628" }}>
+      <option key={o.value} value={o.value} style={{ background: "#0d1f3c" }}>
         {o.label}
       </option>
     ))}
   </select>
 )
 
-// ── Row wrapper ────────────────────────────────
+const Toggle = ({
+  value,
+  onChange,
+}: {
+  value: boolean
+  onChange: (v: boolean) => void
+}) => (
+  <button
+    onClick={() => onChange(!value)}
+    className="relative w-11 h-6 rounded-full transition-all duration-300 shrink-0"
+    style={{ background: value ? "#3b82f6" : "rgba(255,255,255,0.1)" }}
+  >
+    <span
+      className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all duration-300 shadow-sm"
+      style={{ left: value ? "calc(100% - 22px)" : "2px" }}
+    />
+  </button>
+)
+
 const SettingRow = ({
   label,
-  desc,
+  description,
   children,
 }: {
   label: string
-  desc?: string
+  description?: string
   children: React.ReactNode
 }) => (
   <div
     className="flex items-center justify-between gap-4 py-4"
     style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
   >
-    <div>
-      <p className="text-sm text-slate-200 font-medium">{label}</p>
-      {desc && <p className="text-xs text-slate-500 mt-0.5">{desc}</p>}
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-medium text-slate-200">{label}</p>
+      {description && (
+        <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+      )}
     </div>
     <div className="shrink-0">{children}</div>
   </div>
 )
 
-const Card = ({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode
-  className?: string
-}) => (
-  <div
-    className={`rounded-2xl p-5 ${className}`}
-    style={{
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(255,255,255,0.07)",
-    }}
-  >
-    {children}
-  </div>
-)
-
-const SectionTitle = ({ icon, label }: { icon: string; label: string }) => (
-  <div className="flex items-center gap-2 mb-5">
-    <span className="text-xl">{icon}</span>
-    <h2
-      className="text-base font-bold text-slate-100"
-      style={{ fontFamily: "var(--font-d)" }}
-    >
-      {label}
-    </h2>
-  </div>
-)
-
-// ── Page ───────────────────────────────────────
 export default function SettingsPage() {
-  const [active, setActive] = useState<Section>("location")
+  const [activeNav, setActiveNav] = useState("location")
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [editingPass, setEditingPass] = useState(false)
 
-  // Location state
-  const [locations, setLocations] = useState(SAVED_LOCATIONS)
-  const [autoDetect, setAutoDetect] = useState(true)
-  const [locSearch, setLocSearch] = useState("")
-
-  // Appearance state
-  const [tempUnit, setTempUnit] = useState("celsius")
+  // Form state
+  const [name, setName] = useState("")
+  const [tempUnit, setTempUnit] = useState("C")
   const [windUnit, setWindUnit] = useState("kmh")
-  const [timeFormat, setTimeFormat] = useState("12h")
+  const [theme, setTheme] = useState("dark")
   const [language, setLanguage] = useState("en")
-  const [dateFormat, setDateFormat] = useState("dmy")
+  const [notifications, setNotifications] = useState(true)
 
-  // Notification state
-  const [notifs, setNotifs] = useState({
-    severeWeather: true,
-    dailySummary: true,
-    rainAlert: true,
-    uvAlert: false,
-    windAlert: false,
-    aqiAlert: true,
-    weeklyForecast: false,
-    pushEnabled: true,
-    emailEnabled: false,
-  })
-  const [alertThreshold, setAlertThreshold] = useState("moderate")
-  const [summaryTime, setSummaryTime] = useState("07:00")
+  // Default city search
+  const [defaultCity, setDefaultCity] = useState("")
+  const [cityQuery, setCityQuery] = useState("")
+  const [cityResults, setCityResults] = useState<CityResult[]>([])
+  const [citySearching, setCitySearching] = useState(false)
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const cityRef = useRef<HTMLDivElement>(null)
 
-  // Account state
-  const [profile, setProfile] = useState({
-    name: "John Smith",
-    email: "john@example.com",
-    phone: "",
-  })
-  const [editMode, setEditMode] = useState(false)
-  const [showPass, setShowPass] = useState(false)
-  const [twoFA, setTwoFA] = useState(false)
-  const [sessions] = useState([
-    {
-      device: "Chrome — MacBook Pro",
-      location: "Negombo, LK",
-      time: "Active now",
-      current: true,
-    },
-    {
-      device: "WeatherWise iOS App",
-      location: "Colombo, LK",
-      time: "2 hours ago",
-      current: false,
-    },
-    {
-      device: "Firefox — Windows PC",
-      location: "Kandy, LK",
-      time: "3 days ago",
-      current: false,
-    },
-  ])
+  // Password fields
+  const [currentPass, setCurrentPass] = useState("")
+  const [newPass, setNewPass] = useState("")
+  const [confirmPass, setConfirmPass] = useState("")
 
-  const toggleNotif = (key: keyof typeof notifs) =>
-    setNotifs((prev) => ({ ...prev, [key]: !prev[key] }))
+  // ── Close dropdown on outside click ───────
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (cityRef.current && !cityRef.current.contains(e.target as Node)) {
+        setShowCityDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
-  const setDefault = (id: number) =>
-    setLocations((prev) => prev.map((l) => ({ ...l, isDefault: l.id === id })))
+  // ── City search with debounce ──────────────
+  useEffect(() => {
+    if (cityQuery.length < 2) {
+      setCityResults([])
+      return
+    }
 
-  const removeLocation = (id: number) =>
-    setLocations((prev) => prev.filter((l) => l.id !== id))
+    const timer = setTimeout(async () => {
+      setCitySearching(true)
+      try {
+        const res = await fetch(
+          `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityQuery)}&count=8&language=en&format=json`,
+        )
+        const data = await res.json()
+        setCityResults(
+          (data.results ?? []).map((r: any) => ({
+            name: r.name,
+            country: r.country ?? "",
+            lat: r.latitude,
+            lon: r.longitude,
+          })),
+        )
+      } catch {
+        setCityResults([])
+      } finally {
+        setCitySearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [cityQuery])
+
+  // ── Load settings from DB ──────────────────
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/settings")
+        const data = await res.json()
+        setUserData(data)
+        setName(data.name ?? "")
+        if (data.settings) {
+          setTempUnit(data.settings.tempUnit ?? "C")
+          setWindUnit(data.settings.windUnit ?? "kmh")
+          setTheme(data.settings.theme ?? "dark")
+          setLanguage(data.settings.language ?? "en")
+          setNotifications(data.settings.notifications ?? true)
+          setDefaultCity(data.settings.defaultCity ?? "")
+          setCityQuery(data.settings.defaultCity ?? "")
+        }
+      } catch {
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // ── Save settings to DB ────────────────────
+  const save = async (patch: Record<string, any>) => {
+    setSaving(true)
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      })
+      if (res.ok) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2500)
+      }
+    } catch {
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Select city from dropdown ──────────────
+  const selectCity = async (city: CityResult) => {
+    setDefaultCity(city.name)
+    setCityQuery(city.name)
+    setShowCityDropdown(false)
+    setCityResults([])
+    await save({
+      defaultCity: city.name,
+      defaultLat: city.lat,
+      defaultLon: city.lon,
+    })
+  }
+
+  // ── Auto-detect location ───────────────────
+  const detectLocation = async () => {
+    try {
+      // Temporarily clear saved default so IP is used
+      const res = await fetch("/api/location")
+      const data = await res.json()
+      setDefaultCity(data.city ?? "")
+      setCityQuery(data.city ?? "")
+      await save({
+        defaultCity: data.city,
+        defaultLat: data.lat,
+        defaultLon: data.lon,
+      })
+    } catch {}
+  }
+
+  if (loading)
+    return (
+      <div className="flex gap-6">
+        <Skeleton className="w-52 h-64 shrink-0" />
+        <div className="flex-1 flex flex-col gap-3">
+          <Skeleton className="h-8 w-48" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-14" />
+          ))}
+        </div>
+      </div>
+    )
 
   return (
-    <div className="flex gap-4">
+    <div className="flex gap-6">
       {/* ── Left nav ──────────────────────────── */}
-      <div className="w-64 shrink-0 flex flex-col gap-1.5">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setActive(s.id)}
-            className={`flex items-start gap-3 px-4 py-3 rounded-2xl text-left
-                        transition-all duration-200 border
-                        ${
-                          active === s.id
-                            ? "bg-blue-500/10 border-blue-500/25"
-                            : "border-transparent hover:bg-white/[0.03] hover:border-white/[0.07]"
-                        }`}
-          >
-            <span className="text-lg shrink-0 mt-0.5">{s.icon}</span>
-            <div>
-              <p
-                className={`text-sm font-semibold ${active === s.id ? "text-blue-400" : "text-slate-300"}`}
-              >
-                {s.label}
-              </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">{s.desc}</p>
-            </div>
-          </button>
-        ))}
+      <div className="w-52 shrink-0">
+        <div
+          className="rounded-2xl p-2 sticky top-4"
+          style={{
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveNav(item.id)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm
+                         font-medium transition-all duration-200 text-left"
+              style={{
+                background:
+                  activeNav === item.id
+                    ? "rgba(59,130,246,0.1)"
+                    : "transparent",
+                color: activeNav === item.id ? "#60a5fa" : "#64748b",
+                border:
+                  activeNav === item.id
+                    ? "1px solid rgba(59,130,246,0.2)"
+                    : "1px solid transparent",
+              }}
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Right content ─────────────────────── */}
-      <div className="flex-1 min-w-0 flex flex-col gap-4">
-        {/* ── DEFAULT LOCATION ──────────────────── */}
-        {active === "location" && (
-          <>
-            <Card>
-              <SectionTitle icon="📍" label="Default Location" />
+      <div className="flex-1 min-w-0">
+        <div
+          className="rounded-2xl p-6"
+          style={{
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          {/* Save feedback */}
+          {saved && (
+            <div
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl mb-4 text-sm text-green-300"
+              style={{
+                background: "rgba(34,197,94,0.1)",
+                border: "1px solid rgba(34,197,94,0.2)",
+              }}
+            >
+              ✓ Settings saved successfully
+            </div>
+          )}
+
+          {/* ── Default Location ──────────────── */}
+          {activeNav === "location" && (
+            <div>
+              <h2
+                className="text-base font-bold text-slate-100 mb-1"
+                style={{ fontFamily: "var(--font-d)" }}
+              >
+                Default Location
+              </h2>
+              <p className="text-xs text-slate-500 mb-5">
+                This location is used as the default when the dashboard loads.
+              </p>
 
               <SettingRow
                 label="Auto-detect location"
-                desc="Use your device's GPS to detect location automatically"
+                description="Use your IP address to detect location automatically"
               >
-                <Toggle
-                  on={autoDetect}
-                  onChange={() => setAutoDetect(!autoDetect)}
-                />
-              </SettingRow>
-
-              <div className="pt-4">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">
-                  Saved locations
-                </p>
-                <div className="flex flex-col gap-2 mb-4">
-                  {locations.map((loc) => (
-                    <div
-                      key={loc.id}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-                                  ${loc.isDefault ? "bg-blue-500/[0.08] border border-blue-500/25" : "bg-white/[0.03] border border-white/[0.06]"}`}
-                    >
-                      <span className="text-xl">{loc.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-100">
-                          {loc.name}
-                        </p>
-                        <p className="text-xs text-slate-500">{loc.country}</p>
-                      </div>
-                      {loc.isDefault ? (
-                        <span
-                          className="text-[10px] font-bold text-blue-400 px-2 py-0.5 rounded-lg
-                                         bg-blue-500/10 border border-blue-500/20"
-                        >
-                          Default
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setDefault(loc.id)}
-                            className="text-[10px] text-slate-500 hover:text-blue-400 transition-colors px-2 py-1
-                                       rounded-lg hover:bg-blue-500/10"
-                          >
-                            Set default
-                          </button>
-                          <button
-                            onClick={() => removeLocation(loc.id)}
-                            className="text-[10px] text-slate-600 hover:text-red-400 transition-colors
-                                       w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-500/10"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add location */}
-                <div
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                <button
+                  onClick={detectLocation}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-blue-400
+                             transition-all hover:bg-blue-500/20"
                   style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(59,130,246,0.1)",
+                    border: "1px solid rgba(59,130,246,0.2)",
                   }}
                 >
-                  <span className="text-slate-500">🔍</span>
+                  Detect now
+                </button>
+              </SettingRow>
+
+              <SettingRow
+                label="Default city"
+                description="Search and select any city worldwide"
+              >
+                <div className="relative w-64" ref={cityRef}>
                   <input
                     type="text"
-                    value={locSearch}
-                    onChange={(e) => setLocSearch(e.target.value)}
-                    placeholder="Add a new location…"
-                    className="flex-1 bg-transparent text-xs text-slate-300 placeholder-slate-600 outline-none"
-                  />
-                </div>
-              </div>
-            </Card>
-          </>
-        )}
-
-        {/* ── APPEARANCE ────────────────────────── */}
-        {active === "appearance" && (
-          <Card>
-            <SectionTitle icon="🎨" label="Theme & Appearance" />
-
-            <SettingRow
-              label="Temperature unit"
-              desc="Choose how temperatures are displayed"
-            >
-              <Select
-                value={tempUnit}
-                onChange={setTempUnit}
-                options={[
-                  { label: "Celsius (°C)", value: "celsius" },
-                  { label: "Fahrenheit (°F)", value: "fahrenheit" },
-                ]}
-              />
-            </SettingRow>
-
-            <SettingRow
-              label="Wind speed unit"
-              desc="Unit for wind speed readings"
-            >
-              <Select
-                value={windUnit}
-                onChange={setWindUnit}
-                options={[
-                  { label: "km/h", value: "kmh" },
-                  { label: "mph", value: "mph" },
-                  { label: "m/s", value: "ms" },
-                  { label: "knots", value: "knots" },
-                ]}
-              />
-            </SettingRow>
-
-            <SettingRow label="Time format" desc="12-hour or 24-hour clock">
-              <Select
-                value={timeFormat}
-                onChange={setTimeFormat}
-                options={[
-                  { label: "12-hour (AM/PM)", value: "12h" },
-                  { label: "24-hour", value: "24h" },
-                ]}
-              />
-            </SettingRow>
-
-            <SettingRow
-              label="Date format"
-              desc="How dates appear across the app"
-            >
-              <Select
-                value={dateFormat}
-                onChange={setDateFormat}
-                options={[
-                  { label: "DD/MM/YYYY", value: "dmy" },
-                  { label: "MM/DD/YYYY", value: "mdy" },
-                  { label: "YYYY-MM-DD", value: "ymd" },
-                ]}
-              />
-            </SettingRow>
-
-            <SettingRow label="Language" desc="App display language">
-              <Select
-                value={language}
-                onChange={setLanguage}
-                options={[
-                  { label: "English", value: "en" },
-                  { label: "Sinhala", value: "si" },
-                  { label: "Tamil", value: "ta" },
-                  { label: "Japanese", value: "ja" },
-                  { label: "French", value: "fr" },
-                ]}
-              />
-            </SettingRow>
-
-            <div
-              className="pt-2"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-            >
-              <p className="text-xs text-slate-500 uppercase tracking-wider mt-4 mb-3">
-                Theme
-              </p>
-              <div className="flex gap-2">
-                {[
-                  { label: "Dark", value: "dark", icon: "🌙", active: true },
-                  { label: "Light", value: "light", icon: "☀️", active: false },
-                  {
-                    label: "System",
-                    value: "system",
-                    icon: "💻",
-                    active: false,
-                  },
-                ].map((t) => (
-                  <div
-                    key={t.value}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs
-                                font-semibold cursor-pointer border transition-all
-                                ${
-                                  t.active
-                                    ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
-                                    : "bg-white/[0.03] border-white/[0.07] text-slate-400 hover:border-white/15"
-                                }`}
-                  >
-                    <span>{t.icon}</span>
-                    <span>{t.label}</span>
-                    {t.active && (
-                      <span className="text-[9px] ml-1 opacity-70">✓</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-slate-600 mt-2">
-                Light theme coming soon.
-              </p>
-            </div>
-          </Card>
-        )}
-
-        {/* ── NOTIFICATIONS ─────────────────────── */}
-        {active === "notifications" && (
-          <>
-            <Card>
-              <SectionTitle icon="🔔" label="Notifications & Alerts" />
-
-              <SettingRow
-                label="Push notifications"
-                desc="Receive alerts on this device"
-              >
-                <Toggle
-                  on={notifs.pushEnabled}
-                  onChange={() => toggleNotif("pushEnabled")}
-                />
-              </SettingRow>
-              <SettingRow
-                label="Email notifications"
-                desc="Receive alerts by email"
-              >
-                <Toggle
-                  on={notifs.emailEnabled}
-                  onChange={() => toggleNotif("emailEnabled")}
-                />
-              </SettingRow>
-            </Card>
-
-            <Card>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-4">
-                Weather alerts
-              </p>
-              <SettingRow
-                label="Severe weather warnings"
-                desc="Storms, floods, and extreme conditions"
-              >
-                <Toggle
-                  on={notifs.severeWeather}
-                  onChange={() => toggleNotif("severeWeather")}
-                />
-              </SettingRow>
-              <SettingRow
-                label="Rain alerts"
-                desc="Notify when rain is expected in your area"
-              >
-                <Toggle
-                  on={notifs.rainAlert}
-                  onChange={() => toggleNotif("rainAlert")}
-                />
-              </SettingRow>
-              <SettingRow
-                label="High UV index"
-                desc="Alert when UV index reaches dangerous levels"
-              >
-                <Toggle
-                  on={notifs.uvAlert}
-                  onChange={() => toggleNotif("uvAlert")}
-                />
-              </SettingRow>
-              <SettingRow
-                label="Strong wind alerts"
-                desc="Notify when wind speeds exceed threshold"
-              >
-                <Toggle
-                  on={notifs.windAlert}
-                  onChange={() => toggleNotif("windAlert")}
-                />
-              </SettingRow>
-              <SettingRow
-                label="Air quality alerts"
-                desc="Notify when AQI exceeds safe levels"
-              >
-                <Toggle
-                  on={notifs.aqiAlert}
-                  onChange={() => toggleNotif("aqiAlert")}
-                />
-              </SettingRow>
-
-              <div
-                className="pt-4 mt-2"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-              >
-                <SettingRow
-                  label="Alert threshold"
-                  desc="Minimum severity to trigger an alert"
-                >
-                  <Select
-                    value={alertThreshold}
-                    onChange={setAlertThreshold}
-                    options={[
-                      { label: "All alerts", value: "all" },
-                      { label: "Moderate & above", value: "moderate" },
-                      { label: "Severe only", value: "severe" },
-                    ]}
-                  />
-                </SettingRow>
-              </div>
-            </Card>
-
-            <Card>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-4">
-                Scheduled updates
-              </p>
-              <SettingRow
-                label="Daily weather summary"
-                desc="Morning briefing for your default location"
-              >
-                <Toggle
-                  on={notifs.dailySummary}
-                  onChange={() => toggleNotif("dailySummary")}
-                />
-              </SettingRow>
-              {notifs.dailySummary && (
-                <div className="flex items-center justify-between py-3 pl-2">
-                  <p className="text-xs text-slate-400">Summary time</p>
-                  <input
-                    type="time"
-                    value={summaryTime}
-                    onChange={(e) => setSummaryTime(e.target.value)}
-                    className="text-xs text-slate-200 rounded-xl px-3 py-2 outline-none"
+                    value={cityQuery}
+                    onChange={(e) => {
+                      setCityQuery(e.target.value)
+                      setShowCityDropdown(true)
+                    }}
+                    onFocus={() => setShowCityDropdown(true)}
+                    placeholder="Search any city…"
+                    className="w-full px-3 py-2 rounded-xl text-sm text-slate-200 outline-none
+                               placeholder-slate-600 transition-all"
                     style={{
                       background: "rgba(255,255,255,0.06)",
                       border: "1px solid rgba(255,255,255,0.1)",
                     }}
                   />
+
+                  {/* Current saved city badge */}
+                  {defaultCity && (
+                    <p className="text-[10px] text-blue-400 mt-1">
+                      ✓ Current: {defaultCity}
+                    </p>
+                  )}
+
+                  {/* Dropdown */}
+                  {showCityDropdown &&
+                    (citySearching ||
+                      cityResults.length > 0 ||
+                      cityQuery.length >= 2) && (
+                      <div
+                        className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl overflow-hidden"
+                        style={{
+                          background: "rgba(9,21,37,0.98)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          backdropFilter: "blur(24px)",
+                          boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+                        }}
+                      >
+                        {citySearching ? (
+                          <div className="flex items-center gap-2 px-4 py-3">
+                            <span
+                              className="w-3 h-3 border border-blue-400/30 border-t-blue-400
+                                           rounded-full animate-spin"
+                            />
+                            <p className="text-xs text-slate-500">Searching…</p>
+                          </div>
+                        ) : cityResults.length === 0 ? (
+                          <p className="text-xs text-slate-600 text-center py-3">
+                            No cities found
+                          </p>
+                        ) : (
+                          cityResults.map((city) => (
+                            <button
+                              key={`${city.name}-${city.lat}`}
+                              onClick={() => selectCity(city)}
+                              className="w-full flex items-center justify-between px-4 py-2.5
+                                       hover:bg-white/5 transition-colors text-left"
+                            >
+                              <span className="text-sm text-slate-300 font-medium">
+                                {city.name}
+                              </span>
+                              <span className="text-xs text-slate-600">
+                                {city.country}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                 </div>
-              )}
-              <SettingRow
-                label="Weekly forecast"
-                desc="Every Sunday — 7-day outlook for the week ahead"
+              </SettingRow>
+            </div>
+          )}
+
+          {/* ── Appearance ────────────────────── */}
+          {activeNav === "appearance" && (
+            <div>
+              <h2
+                className="text-base font-bold text-slate-100 mb-1"
+                style={{ fontFamily: "var(--font-d)" }}
               >
-                <Toggle
-                  on={notifs.weeklyForecast}
-                  onChange={() => toggleNotif("weeklyForecast")}
+                Appearance
+              </h2>
+              <p className="text-xs text-slate-500 mb-5">
+                Customize how WeatherWise looks and displays data.
+              </p>
+
+              <SettingRow
+                label="Temperature unit"
+                description="Unit used for all temperature values"
+              >
+                <Select
+                  value={tempUnit}
+                  onChange={(v) => {
+                    setTempUnit(v)
+                    save({ tempUnit: v })
+                  }}
+                  options={TEMP_UNITS}
                 />
               </SettingRow>
-            </Card>
-          </>
-        )}
-
-        {/* ── ACCOUNT ───────────────────────────── */}
-        {active === "account" && (
-          <>
-            {/* Profile */}
-            <Card>
-              <div className="flex items-center justify-between mb-5">
-                <SectionTitle icon="👤" label="Account & Profile" />
-                <button
-                  onClick={() => setEditMode(!editMode)}
-                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold border transition-all
-                              ${
-                                editMode
-                                  ? "bg-blue-500/20 border-blue-500/40 text-blue-400"
-                                  : "bg-white/[0.04] border-white/[0.1] text-slate-400 hover:text-slate-200"
-                              }`}
-                >
-                  {editMode ? "Save changes" : "Edit profile"}
-                </button>
-              </div>
-
-              {/* Avatar */}
-              <div className="flex items-center gap-4 mb-6">
-                <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold
-                             text-blue-400 shrink-0"
-                  style={{
-                    background: "rgba(59,130,246,0.15)",
-                    border: "2px solid rgba(59,130,246,0.3)",
+              <SettingRow
+                label="Wind speed unit"
+                description="Unit used for wind speed values"
+              >
+                <Select
+                  value={windUnit}
+                  onChange={(v) => {
+                    setWindUnit(v)
+                    save({ windUnit: v })
                   }}
-                >
-                  {profile.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-100">
-                    {profile.name}
-                  </p>
-                  <p className="text-xs text-slate-500">{profile.email}</p>
-                  <span
-                    className="text-[10px] font-semibold text-blue-400 bg-blue-500/10
-                                   border border-blue-500/20 px-2 py-0.5 rounded-lg mt-1 inline-block"
-                  >
-                    Pro Plan
-                  </span>
-                </div>
-              </div>
+                  options={WIND_UNITS}
+                />
+              </SettingRow>
+              <SettingRow label="Theme" description="App color theme">
+                <Select
+                  value={theme}
+                  onChange={(v) => {
+                    setTheme(v)
+                    save({ theme: v })
+                  }}
+                  options={THEMES}
+                />
+              </SettingRow>
+              <SettingRow
+                label="Language"
+                description="Display language for the app"
+              >
+                <Select
+                  value={language}
+                  onChange={(v) => {
+                    setLanguage(v)
+                    save({ language: v })
+                  }}
+                  options={LANGUAGES}
+                />
+              </SettingRow>
+            </div>
+          )}
+
+          {/* ── Notifications ─────────────────── */}
+          {activeNav === "notifications" && (
+            <div>
+              <h2
+                className="text-base font-bold text-slate-100 mb-1"
+                style={{ fontFamily: "var(--font-d)" }}
+              >
+                Notifications
+              </h2>
+              <p className="text-xs text-slate-500 mb-5">
+                Control what alerts and updates you receive.
+              </p>
+
+              <SettingRow
+                label="Enable notifications"
+                description="Master toggle for all notifications"
+              >
+                <Toggle
+                  value={notifications}
+                  onChange={(v) => {
+                    setNotifications(v)
+                    save({ notifications: v })
+                  }}
+                />
+              </SettingRow>
 
               {[
                 {
-                  label: "Full name",
-                  key: "name",
-                  type: "text",
-                  placeholder: "Your name",
+                  label: "Severe weather alerts",
+                  desc: "Storms, floods, extreme heat",
                 },
                 {
-                  label: "Email address",
-                  key: "email",
-                  type: "email",
-                  placeholder: "your@email.com",
+                  label: "Daily forecast summary",
+                  desc: "Morning briefing every day",
+                },
+                { label: "Rain alerts", desc: "Notify when rain is expected" },
+                {
+                  label: "UV index warnings",
+                  desc: "Alert when UV exceeds level 6",
                 },
                 {
-                  label: "Phone number",
-                  key: "phone",
-                  type: "tel",
-                  placeholder: "+1 (555) 000-0000",
+                  label: "Air quality alerts",
+                  desc: "Alert when AQI exceeds 100",
                 },
-              ].map((f) => (
-                <div key={f.key} className="mb-3">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">
-                    {f.label}
-                  </p>
-                  <input
-                    type={f.type}
-                    disabled={!editMode}
-                    value={(profile as any)[f.key]}
-                    onChange={(e) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        [f.key]: e.target.value,
-                      }))
-                    }
-                    placeholder={f.placeholder}
-                    className={`w-full text-sm rounded-xl px-4 py-2.5 outline-none transition-all
-                                ${
-                                  editMode
-                                    ? "text-slate-100 border-blue-500/30"
-                                    : "text-slate-300 border-white/[0.08]"
-                                }`}
-                    style={{
-                      background: editMode
-                        ? "rgba(59,130,246,0.06)"
-                        : "rgba(255,255,255,0.03)",
-                      border: `1px solid ${editMode ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.08)"}`,
+              ].map((item) => (
+                <SettingRow
+                  key={item.label}
+                  label={item.label}
+                  description={item.desc}
+                >
+                  <Toggle
+                    value={notifications}
+                    onChange={(v) => {
+                      setNotifications(v)
+                      save({ notifications: v })
                     }}
                   />
-                </div>
+                </SettingRow>
               ))}
-            </Card>
+            </div>
+          )}
 
-            {/* Security */}
-            <Card>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-4">
-                Security
+          {/* ── Account ───────────────────────── */}
+          {activeNav === "account" && (
+            <div>
+              <h2
+                className="text-base font-bold text-slate-100 mb-1"
+                style={{ fontFamily: "var(--font-d)" }}
+              >
+                Account
+              </h2>
+              <p className="text-xs text-slate-500 mb-5">
+                Manage your profile and account security.
               </p>
 
-              <SettingRow
-                label="Two-factor authentication"
-                desc="Add an extra layer of security to your account"
-              >
-                <Toggle on={twoFA} onChange={() => setTwoFA(!twoFA)} />
-              </SettingRow>
-
-              <div
-                className="py-4"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-200 font-medium">
-                      Password
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Last changed 3 months ago
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowPass(!showPass)}
-                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5
-                               rounded-xl bg-blue-500/10 border border-blue-500/20"
-                  >
-                    Change password
-                  </button>
-                </div>
-                {showPass && (
-                  <div className="mt-3 flex flex-col gap-2">
-                    {[
-                      "Current password",
-                      "New password",
-                      "Confirm new password",
-                    ].map((lbl) => (
+              <SettingRow label="Full name" description="Your display name">
+                <div className="flex items-center gap-2">
+                  {editingName ? (
+                    <>
                       <input
-                        key={lbl}
-                        type="password"
-                        placeholder={lbl}
-                        className="w-full text-sm rounded-xl px-4 py-2.5 outline-none text-slate-300
-                                   placeholder-slate-600"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        autoFocus
+                        className="px-3 py-2 rounded-xl text-sm text-slate-200 outline-none w-36"
                         style={{
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(255,255,255,0.08)",
+                          background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(59,130,246,0.4)",
                         }}
                       />
-                    ))}
-                    <button
-                      className="self-end text-xs px-4 py-2 rounded-xl font-semibold
-                                 bg-blue-500 hover:bg-blue-600 text-white transition-colors mt-1"
-                    >
-                      Update password
-                    </button>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Active sessions */}
-            <Card>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-4">
-                Active sessions
-              </p>
-              <div className="flex flex-col gap-2">
-                {sessions.map((s, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl
-                                ${s.current ? "bg-green-500/[0.06] border border-green-500/15" : "bg-white/[0.03] border border-white/[0.06]"}`}
-                  >
-                    <div>
-                      <p className="text-xs font-semibold text-slate-200">
-                        {s.device}
-                      </p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">
-                        {s.location} · {s.time}
-                      </p>
-                    </div>
-                    {s.current ? (
-                      <span className="text-[10px] text-green-400 font-semibold">
-                        Current
-                      </span>
-                    ) : (
-                      <button className="text-[10px] text-slate-600 hover:text-red-400 transition-colors">
-                        Revoke
+                      <button
+                        onClick={async () => {
+                          await save({ name })
+                          setEditingName(false)
+                        }}
+                        disabled={saving}
+                        className="px-3 py-2 rounded-xl text-xs font-semibold text-blue-400
+                                   disabled:opacity-50 transition-all hover:bg-blue-500/20"
+                        style={{
+                          background: "rgba(59,130,246,0.1)",
+                          border: "1px solid rgba(59,130,246,0.2)",
+                        }}
+                      >
+                        {saving ? "…" : "Save"}
                       </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Danger zone */}
-            <Card>
-              <p className="text-xs text-red-500/70 uppercase tracking-wider mb-4">
-                Danger zone
-              </p>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-200 font-medium">
-                    Delete account
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Permanently delete your account and all data. This cannot be
-                    undone.
-                  </p>
+                      <button
+                        onClick={() => setEditingName(false)}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm text-slate-300">
+                        {name || "—"}
+                      </span>
+                      <button
+                        onClick={() => setEditingName(true)}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2"
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
                 </div>
+              </SettingRow>
+
+              <SettingRow
+                label="Email address"
+                description="Used for login and notifications"
+              >
+                <span className="text-sm text-slate-400">
+                  {userData?.email}
+                </span>
+              </SettingRow>
+
+              <SettingRow
+                label="Password"
+                description="Update your account password"
+              >
                 <button
-                  className="text-xs px-4 py-2 rounded-xl font-semibold border transition-all
-                             text-red-400 border-red-500/30 bg-red-500/5 hover:bg-red-500/15"
+                  onClick={() => setEditingPass(!editingPass)}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold transition-all
+                             text-slate-400 hover:text-slate-200"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {editingPass ? "Cancel" : "Change password"}
+                </button>
+              </SettingRow>
+
+              {editingPass && (
+                <div
+                  className="flex flex-col gap-3 p-4 rounded-xl mb-2"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {[
+                    {
+                      label: "Current password",
+                      value: currentPass,
+                      setter: setCurrentPass,
+                    },
+                    {
+                      label: "New password",
+                      value: newPass,
+                      setter: setNewPass,
+                    },
+                    {
+                      label: "Confirm password",
+                      value: confirmPass,
+                      setter: setConfirmPass,
+                    },
+                  ].map((f) => (
+                    <div key={f.label}>
+                      <label className="text-xs text-slate-500 block mb-1">
+                        {f.label}
+                      </label>
+                      <input
+                        type="password"
+                        value={f.value}
+                        onChange={(e) => f.setter(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-sm text-slate-200 outline-none"
+                        style={{
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <button
+                    className="w-full py-2 rounded-xl text-sm font-semibold text-white mt-1
+                               transition-all disabled:opacity-50"
+                    style={{
+                      background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                    }}
+                    disabled={
+                      !currentPass || !newPass || newPass !== confirmPass
+                    }
+                  >
+                    Update password
+                  </button>
+                  {newPass && confirmPass && newPass !== confirmPass && (
+                    <p className="text-xs text-red-400">
+                      Passwords do not match
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Danger zone */}
+              <div
+                className="mt-6 pt-4"
+                style={{ borderTop: "1px solid rgba(239,68,68,0.15)" }}
+              >
+                <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">
+                  Danger zone
+                </p>
+                <button
+                  onClick={() =>
+                    confirm("Are you sure? This cannot be undone.") &&
+                    alert("Account deletion coming soon.")
+                  }
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-red-400
+                             transition-all hover:bg-red-500/20"
+                  style={{
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                  }}
                 >
                   Delete account
                 </button>
               </div>
-            </Card>
-          </>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
