@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react"
 import type { CurrentWeather } from "@/types"
+import { useToast } from "@/context/ToastContext"
 
 interface Favorite {
   id: string
@@ -46,6 +47,7 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
 )
 
 export default function FavoritesPage() {
+  const toast = useToast()
   const [favorites, setFavorites] = useState<FavoriteWithWeather[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"grid" | "list">("grid")
@@ -113,7 +115,7 @@ export default function FavoritesPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error ?? "Failed to add favorite")
+        toast(data.error ?? "Failed to add favorite", "error")
         return
       }
 
@@ -123,6 +125,7 @@ export default function FavoritesPage() {
         error: false,
       }
       setFavorites((prev) => [...prev, newFav])
+      toast(`${city.cityName} added to favorites!`, "success")
 
       // Fetch its weather
       const params = new URLSearchParams({
@@ -142,7 +145,7 @@ export default function FavoritesPage() {
         ),
       )
     } catch {
-      alert("Failed to add favorite")
+      toast("Failed to add favorite", "error")
     } finally {
       setAdding(null)
     }
@@ -161,7 +164,10 @@ export default function FavoritesPage() {
 
     const res = await fetch(`/api/favorites?id=${id}`, { method: "DELETE" })
     if (res.ok) {
+      toast(`${fav?.cityName ?? "City"} removed from favorites`, "info")
       setFavorites((prev) => prev.filter((f) => f.id !== id))
+    } else {
+      toast("Failed to remove favorite", "error")
     }
   }
 
