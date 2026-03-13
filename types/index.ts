@@ -92,6 +92,8 @@ export interface AirQuality {
   so2: number
   o3: number
   color: string
+  forecast: { date: string; aqi: number; level: string; color: string }[]
+  hourly: { time: string; aqi: number }[]
 }
 
 export type AQILevel =

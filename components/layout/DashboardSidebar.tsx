@@ -126,7 +126,10 @@ const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
         className="flex items-center h-16 px-4 shrink-0"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
-        <Link href="/" className="flex items-center gap-3 no-underline min-w-0">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-3 no-underline min-w-0"
+        >
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
             style={{

@@ -6,7 +6,7 @@ import type {
   AirQuality,
   Location,
   SearchResult,
-} from "../../types"
+} from "@/types"
 
 // ─────────────────────────────────────────────
 //  Weather API Service
@@ -165,6 +165,8 @@ export async function getWeatherData(
     longitude: String(lon),
     current:
       "european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone",
+    hourly: "european_aqi",
+    forecast_days: "7",
     timezone: location.timezone || "auto",
   })
 
@@ -250,6 +252,41 @@ export async function getWeatherData(
   const aqiC = aqiJson.current
   const aqiScore = Math.round(aqiC?.european_aqi || 0)
   const { level, color } = getAQILevel(aqiScore)
+
+  // Build 7-day daily AQI forecast from hourly data (take midday value per day)
+  const aqiHourlyTimes: string[] = aqiJson.hourly?.time ?? []
+  const aqiHourlyVals: number[] = aqiJson.hourly?.european_aqi ?? []
+
+  const aqiForecastMap: Record<string, number[]> = {}
+  aqiHourlyTimes.forEach((t: string, i: number) => {
+    const day = t.split("T")[0]
+    if (!aqiForecastMap[day]) aqiForecastMap[day] = []
+    if (aqiHourlyVals[i] != null) aqiForecastMap[day].push(aqiHourlyVals[i])
+  })
+
+  const aqiDailyForecast = Object.entries(aqiForecastMap)
+    .slice(0, 7)
+    .map(([date, vals]) => {
+      const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+      const { level: l, color: c } = getAQILevel(avg)
+      return { date, aqi: avg, level: l, color: c }
+    })
+
+  // Hourly AQI for chart (next 24h)
+  const nowIdx = aqiHourlyTimes.findIndex(
+    (t: string) => new Date(t) >= new Date(),
+  )
+  const startIdx = nowIdx >= 0 ? nowIdx : 0
+  const aqiHourlyChart = aqiHourlyTimes
+    .slice(startIdx, startIdx + 24)
+    .map((t: string, i: number) => ({
+      time: new Date(t).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      aqi: Math.round(aqiHourlyVals[startIdx + i] ?? 0),
+    }))
+
   const airQuality: AirQuality = {
     aqi: aqiScore,
     aqiLevel: level as any,
@@ -261,6 +298,8 @@ export async function getWeatherData(
     so2: Math.round(aqiC?.sulphur_dioxide || 0),
     o3: Math.round(aqiC?.ozone || 0),
     color,
+    forecast: aqiDailyForecast,
+    hourly: aqiHourlyChart,
   }
 
   // ── Alerts — OpenWeather ───────────────────

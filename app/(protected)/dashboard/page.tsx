@@ -98,16 +98,61 @@ const Skeleton = ({ className = "" }: { className?: string }) => (
   <div className={`animate-pulse rounded-xl bg-white/5 ${className}`} />
 )
 
-// ── Moon phase ────────────────────────────────
-const MOON = {
-  phase: "Waxing Crescent",
-  illumination: 28,
-  nextFull: "in 8 days",
-  emoji: "🌒",
-  age: "6.2 days",
-  rise: "9:14 AM",
-  set: "10:32 PM",
+// ── Moon phase calculator ──────────────────────
+function getMoonPhase(date: Date = new Date()) {
+  // Known new moon reference: Jan 6 2000 18:14 UTC
+  const known = new Date("2000-01-06T18:14:00Z")
+  const cycle = 29.53058867 // synodic month in days
+  const elapsed = (date.getTime() - known.getTime()) / (1000 * 60 * 60 * 24)
+  const age = ((elapsed % cycle) + cycle) % cycle
+  const illum = Math.round(50 * (1 - Math.cos((age / cycle) * 2 * Math.PI)))
+  const daysToFull =
+    age <= cycle / 2
+      ? Math.round(cycle / 2 - age)
+      : Math.round(cycle * 1.5 - age)
+
+  let phase = "New Moon",
+    emoji = "🌑"
+  if (age < 1.85) {
+    phase = "New Moon"
+    emoji = "🌑"
+  } else if (age < 7.38) {
+    phase = "Waxing Crescent"
+    emoji = "🌒"
+  } else if (age < 9.22) {
+    phase = "First Quarter"
+    emoji = "🌓"
+  } else if (age < 14.77) {
+    phase = "Waxing Gibbous"
+    emoji = "🌔"
+  } else if (age < 16.61) {
+    phase = "Full Moon"
+    emoji = "🌕"
+  } else if (age < 22.15) {
+    phase = "Waning Gibbous"
+    emoji = "🌖"
+  } else if (age < 23.99) {
+    phase = "Last Quarter"
+    emoji = "🌗"
+  } else if (age < 29.53) {
+    phase = "Waning Crescent"
+    emoji = "🌘"
+  }
+
+  return {
+    phase,
+    emoji,
+    illumination: illum,
+    age: `${age.toFixed(1)} days`,
+    nextFull:
+      daysToFull === 0
+        ? "tonight"
+        : daysToFull === 1
+          ? "tomorrow"
+          : `in ${daysToFull} days`,
+  }
 }
+const MOON = getMoonPhase()
 
 // ── Page ───────────────────────────────────────
 export default function DashboardPage() {
@@ -121,7 +166,7 @@ export default function DashboardPage() {
         setLoading(true)
 
         // 1. Get location
-        const locRes = await fetch("/api/location", { cache: "no-store" })
+        const locRes = await fetch("/api/location")
         const loc = await locRes.json()
 
         // 2. Get weather
@@ -188,16 +233,8 @@ export default function DashboardPage() {
   const aqi = getAqiLabel(airQuality.aqi)
   const today = daily[0]
 
-  const nowHour = new Date().getHours()
-  const startIdx = hourly.findIndex(
-    (h) => new Date(h.time).getHours() >= nowHour,
-  )
-  const from = startIdx >= 0 ? startIdx : 0
-  // Always fill 12 cards — wrap into next day if needed
-  const next12 =
-    hourly.length >= from + 12
-      ? hourly.slice(from, from + 12)
-      : [...hourly.slice(from), ...hourly.slice(0, 12 - (hourly.length - from))]
+  // Next 12 hourly slots
+  const next12 = hourly.slice(0, 12)
 
   // Precipitation data for the week
   const precipData = daily.map((d) => ({ day: d.dayName, mm: d.precipMm }))
@@ -733,11 +770,10 @@ export default function DashboardPage() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {[
               { label: "Age", value: MOON.age },
-              { label: "Moonrise", value: MOON.rise },
-              { label: "Moonset", value: MOON.set },
+              { label: "Next Full", value: MOON.nextFull },
             ].map((m) => (
               <div
                 key={m.label}
