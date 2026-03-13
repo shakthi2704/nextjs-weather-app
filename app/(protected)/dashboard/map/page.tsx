@@ -221,31 +221,46 @@ export default function MapPage() {
       )
     markersRef.current.push(mainMarker)
 
-    // Nearby city markers
-    NEARBY_OFFSETS.forEach((offset) => {
+    // Nearby city markers — fetch real weather for each
+    NEARBY_OFFSETS.forEach(async (offset) => {
       const nLat = lat + offset.dlat
       const nLon = lon + offset.dlon
-      const nTemp = current.temp + Math.round((Math.random() - 0.5) * 4)
 
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="
-          background: rgba(9,21,37,0.85);
-          border: 1px solid rgba(255,255,255,0.15);
-          border-radius: 10px;
-          padding: 3px 7px;
-          font-size: 11px;
-          font-weight: 600;
-          color: #cbd5e1;
-          white-space: nowrap;
-          display: flex; align-items: center; gap: 3px;
-        ">
-          ${current.conditionIcon} ${nTemp}°C
-        </div>`,
-        iconAnchor: [30, 14],
-      })
-      const m = L.marker([nLat, nLon], { icon }).addTo(map)
-      markersRef.current.push(m)
+      try {
+        const params = new URLSearchParams({
+          lat: String(nLat),
+          lon: String(nLon),
+          city: offset.name,
+          country: "",
+          timezone: "auto",
+        })
+        const res = await fetch(`/api/weather?${params}`)
+        const data = await res.json()
+        const nTemp = data?.current?.temp ?? "—"
+        const nIcon = data?.current?.conditionIcon ?? "🌡️"
+
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="
+            background: rgba(9,21,37,0.85);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 3px 7px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #cbd5e1;
+            white-space: nowrap;
+            display: flex; align-items: center; gap: 3px;
+          ">
+            ${nIcon} ${nTemp}°C
+          </div>`,
+          iconAnchor: [30, 14],
+        })
+        const m = L.marker([nLat, nLon], { icon }).addTo(map)
+        markersRef.current.push(m)
+      } catch {
+        // Skip marker if fetch fails
+      }
     })
   }, [mapReady, weather])
 
