@@ -86,13 +86,12 @@ const HeroWeatherCard = () => {
   useEffect(() => {
     async function load() {
       try {
-        // 1. Get location via IP
-        const locRes = await fetch(
-          "https://ip-api.com/json?fields=status,city,country,lat,lon,timezone",
-        )
+        // 1. Use our own location API (server-side IP detection, no CORS issues)
+        const locRes = await fetch("/api/location")
+        if (!locRes.ok) throw new Error("location failed")
         const loc = await locRes.json()
-        if (loc.status !== "success") throw new Error("location failed")
-        setCity(`${loc.city}, ${loc.country}`)
+        if (loc.error) throw new Error(loc.error)
+        setCity(`${loc.city}${loc.country ? `, ${loc.country}` : ""}`)
 
         // 2. Fetch weather from Open-Meteo
         const params = new URLSearchParams({
