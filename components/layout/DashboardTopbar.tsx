@@ -28,6 +28,8 @@ const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
 // ── Build notifications from real weather data ─────────────────────────────
 function buildNotifications(
   weather: any,
+  fmtTemp: (v: number) => string,
+  fmtWind: (v: number) => string,
 ): {
   id: number
   icon: string
@@ -308,7 +310,7 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
     load()
   }, [])
 
-  const notifications = buildNotifications(weather)
+  const notifications = buildNotifications(weather, fmtTemp, fmtWind)
   const unreadCount = notifications.filter((n) => n.unread).length
   const closeAll = () => {
     setShowNotif(false)
