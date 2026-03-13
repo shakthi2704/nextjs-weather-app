@@ -3,6 +3,9 @@
 
 import { useState, useEffect } from "react"
 import type { WeatherData } from "@/types"
+import CitySearchBar, {
+  type CityResult,
+} from "@/components/layout/CitySearchBar"
 
 // ── AQI helpers ────────────────────────────────
 const getAqiInfo = (aqi: number) =>
@@ -125,26 +128,60 @@ export default function AirQualityPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activePollutant, setActivePollutant] = useState<string | null>(null)
+  const [city, setCity] = useState<string | undefined>(undefined)
+
+  async function loadForCity(
+    lat: number,
+    lon: number,
+    cityName: string,
+    country: string,
+    timezone: string,
+  ) {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({
+        lat: String(lat),
+        lon: String(lon),
+        city: cityName,
+        country,
+        timezone,
+      })
+      const wRes = await fetch(`/api/weather?${params}`)
+      const data = await wRes.json()
+      if (data.error) throw new Error(data.error)
+      setWeather(data)
+      setCity(cityName)
+    } catch (e: any) {
+      setError(e.message ?? "Failed to load air quality data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCitySelect = (r: CityResult) =>
+    loadForCity(
+      r.latitude,
+      r.longitude,
+      r.name,
+      r.country,
+      r.timezone ?? "auto",
+    )
 
   useEffect(() => {
     async function load() {
       try {
         const locRes = await fetch("/api/location")
         const loc = await locRes.json()
-        const params = new URLSearchParams({
-          lat: String(loc.lat),
-          lon: String(loc.lon),
-          city: loc.city ?? "Unknown",
-          country: loc.country ?? "Unknown",
-          timezone: loc.timezone ?? "auto",
-        })
-        const wRes = await fetch(`/api/weather?${params}`)
-        const data = await wRes.json()
-        if (data.error) throw new Error(data.error)
-        setWeather(data)
+        await loadForCity(
+          loc.lat,
+          loc.lon,
+          loc.city ?? "Unknown",
+          loc.country ?? "Unknown",
+          loc.timezone ?? "auto",
+        )
       } catch (e: any) {
         setError(e.message ?? "Failed to load air quality data")
-      } finally {
         setLoading(false)
       }
     }
@@ -257,25 +294,43 @@ export default function AirQualityPage() {
     },
   ]
 
-  // Simulate 7-day AQI forecast from daily UV/precip data as proxy
-  const aqiForecast = daily.map((d, i) => ({
-    day: d.dayName,
-    aqi: Math.round(airQuality.aqi * (0.85 + Math.random() * 0.3)),
-    icon: d.conditionIcon,
+  // ── Real AQI forecast + hourly from API ───
+  const aqiForecast = (airQuality.forecast ?? []).map((d, i) => ({
+    day:
+      i === 0
+        ? "Today"
+        : new Date(d.date).toLocaleDateString([], { weekday: "short" }),
+    aqi: d.aqi,
+    icon: daily[i]?.conditionIcon ?? "🌡️",
+    color: d.color,
   }))
 
-  // Simulate hourly AQI bars
-  const hourlyAqi = Array.from({ length: 24 }, (_, i) => ({
-    hour:
-      i === 0 ? "12AM" : i < 12 ? `${i}AM` : i === 12 ? "12PM" : `${i - 12}PM`,
-    aqi: Math.round(
-      airQuality.aqi * (0.7 + Math.sin(i / 4) * 0.3 + Math.random() * 0.15),
-    ),
+  const hourlyAqi = (airQuality.hourly ?? []).map((h) => ({
+    hour: h.time,
+    aqi: h.aqi,
   }))
-  const maxHourly = Math.max(...hourlyAqi.map((h) => h.aqi))
+  const maxHourly = Math.max(...hourlyAqi.map((h) => h.aqi), 1)
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ── City search bar ───────────────────── */}
+      <div className="flex items-center justify-between gap-4">
+        <CitySearchBar
+          currentCity={city ?? weather?.location.city}
+          onSelect={handleCitySelect}
+          loading={loading}
+        />
+        {weather && (
+          <p className="text-xs text-slate-500 shrink-0">
+            Last updated:{" "}
+            {new Date().toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </p>
+        )}
+      </div>
+
       {/* ── Row 1: AQI hero + 7-day forecast ──── */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
         {/* AQI Gauge hero */}

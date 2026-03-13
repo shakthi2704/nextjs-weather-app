@@ -1,11 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 
-// ── Page title map ─────────────────────────────
 const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
   "/dashboard": { title: "Overview", desc: "Your weather at a glance" },
   "/dashboard/forecast": { title: "Forecast", desc: "7-day detailed forecast" },
@@ -25,43 +24,107 @@ const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
   "/dashboard/settings": { title: "Settings", desc: "Preferences & account" },
 }
 
-// ── Notifications (static for now) ────────────
-const NOTIFICATIONS = [
-  {
-    id: 1,
-    icon: "⛈️",
-    title: "Thunderstorm Warning",
-    desc: "Heavy rain expected 4–8 PM",
-    time: "2m ago",
-    unread: true,
-  },
-  {
-    id: 2,
-    icon: "💨",
-    title: "Wind Advisory",
-    desc: "Strong SW gusts up to 45 km/h tonight",
-    time: "1h ago",
-    unread: true,
-  },
-  {
-    id: 3,
-    icon: "☀️",
-    title: "Clear skies tomorrow",
-    desc: "Great day ahead — UV index will be high",
-    time: "3h ago",
-    unread: false,
-  },
-]
+// ── Build notifications from real weather data ─────────────────────────────
+function buildNotifications(
+  weather: any,
+): {
+  id: number
+  icon: string
+  title: string
+  desc: string
+  time: string
+  unread: boolean
+}[] {
+  if (!weather?.current) return []
+  const notifs = []
+  const { temp, feelsLike, humidity, windSpeed, conditionText, uvIndex } =
+    weather.current
 
-// ── Notification dropdown ──────────────────────
-const NotificationDropdown = ({ onClose }: { onClose: () => void }) => (
+  if (windSpeed >= 40) {
+    notifs.push({
+      id: 1,
+      icon: "💨",
+      title: "Wind Advisory",
+      desc: `Strong winds at ${windSpeed} km/h — take care outdoors.`,
+      time: "Now",
+      unread: true,
+    })
+  }
+  if (temp >= 35 || feelsLike >= 38) {
+    notifs.push({
+      id: 2,
+      icon: "🌡️",
+      title: "Heat Alert",
+      desc: `Feels like ${feelsLike}°C — stay hydrated and avoid midday sun.`,
+      time: "Now",
+      unread: true,
+    })
+  }
+  if (humidity >= 85) {
+    notifs.push({
+      id: 3,
+      icon: "💧",
+      title: "High Humidity",
+      desc: `Humidity at ${humidity}% — uncomfortable conditions outside.`,
+      time: "Now",
+      unread: true,
+    })
+  }
+  if (
+    conditionText?.toLowerCase().includes("rain") ||
+    conditionText?.toLowerCase().includes("storm")
+  ) {
+    notifs.push({
+      id: 4,
+      icon: "⛈️",
+      title: "Rain Expected",
+      desc: `${conditionText} — consider carrying an umbrella.`,
+      time: "Now",
+      unread: true,
+    })
+  }
+  if (uvIndex >= 8) {
+    notifs.push({
+      id: 5,
+      icon: "☀️",
+      title: "High UV Index",
+      desc: `UV index is ${uvIndex} — wear sunscreen if going outside.`,
+      time: "Now",
+      unread: false,
+    })
+  }
+
+  // If nothing triggered, show a positive one
+  if (notifs.length === 0) {
+    notifs.push({
+      id: 6,
+      icon: "✅",
+      title: "All clear",
+      desc: `${conditionText} with ${temp}°C — good conditions outside.`,
+      time: "Now",
+      unread: false,
+    })
+  }
+
+  return notifs.slice(0, 4)
+}
+
+// ── Notification dropdown ──────────────────────────────────────────────────
+const NotificationDropdown = ({
+  onClose,
+  notifications,
+}: {
+  onClose: () => void
+  notifications: ReturnType<typeof buildNotifications>
+}) => (
   <div
-    className="absolute right-0 top-full mt-2 w-80 rounded-2xl z-50 overflow-hidden"
+    className="absolute right-0 top-full mt-2 w-80 rounded-2xl overflow-hidden"
     style={{
       background: "rgba(9,21,37,0.97)",
       border: "1px solid rgba(255,255,255,0.1)",
       backdropFilter: "blur(24px)",
       boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+      zIndex: 9999,
     }}
   >
     <div
@@ -83,7 +146,7 @@ const NotificationDropdown = ({ onClose }: { onClose: () => void }) => (
     </div>
 
     <div className="flex flex-col">
-      {NOTIFICATIONS.map((n) => (
+      {notifications.map((n) => (
         <div
           key={n.id}
           className={`flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.03]
@@ -113,8 +176,7 @@ const NotificationDropdown = ({ onClose }: { onClose: () => void }) => (
       <Link
         href="/dashboard/settings"
         onClick={onClose}
-        className="block text-center text-xs text-slate-500
-                       hover:text-slate-300 transition-colors"
+        className="block text-center text-xs text-slate-500 hover:text-slate-300 transition-colors"
       >
         Manage notification settings →
       </Link>
@@ -122,7 +184,7 @@ const NotificationDropdown = ({ onClose }: { onClose: () => void }) => (
   </div>
 )
 
-// ── User dropdown ──────────────────────────────
+// ── User dropdown ──────────────────────────────────────────────────────────
 const UserDropdown = ({
   onClose,
   name,
@@ -133,15 +195,15 @@ const UserDropdown = ({
   email: string
 }) => (
   <div
-    className="absolute right-0 top-full mt-2 w-56 rounded-2xl z-50 overflow-hidden"
+    className="absolute right-0 top-full mt-2 w-56 rounded-2xl overflow-hidden"
     style={{
       background: "rgba(9,21,37,0.97)",
       border: "1px solid rgba(255,255,255,0.1)",
       backdropFilter: "blur(24px)",
       boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+      zIndex: 9999,
     }}
   >
-    {/* User info */}
     <div
       className="px-4 py-3.5"
       style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
@@ -156,7 +218,6 @@ const UserDropdown = ({
       </span>
     </div>
 
-    {/* Menu items */}
     <div className="py-1.5">
       {[
         {
@@ -192,7 +253,6 @@ const UserDropdown = ({
       ))}
     </div>
 
-    {/* Sign out */}
     <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
@@ -206,22 +266,53 @@ const UserDropdown = ({
   </div>
 )
 
-// ── Main Topbar ────────────────────────────────
+// ── Main Topbar ────────────────────────────────────────────────────────────
 const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
   const pathname = usePathname()
   const { data: session } = useSession()
   const page = PAGE_TITLES[pathname] ?? { title: "Dashboard", desc: "" }
-  const unreadCount = NOTIFICATIONS.filter((n) => n.unread).length
 
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
+  const [locationLabel, setLocationLabel] = useState("Locating…")
+  const [tempLabel, setTempLabel] = useState("…°C")
+  const [condIcon, setCondIcon] = useState("⛅")
+  const [weather, setWeather] = useState<any>(null)
 
+  // ── Fetch real location + weather ─────────
+  useEffect(() => {
+    async function load() {
+      try {
+        const locRes = await fetch("/api/location")
+        const loc = await locRes.json()
+        setLocationLabel(`${loc.city}, ${loc.country}`)
+
+        const params = new URLSearchParams({
+          lat: String(loc.lat),
+          lon: String(loc.lon),
+          city: loc.city ?? "Unknown",
+          country: loc.country ?? "Unknown",
+          timezone: loc.timezone ?? "auto",
+        })
+        const wRes = await fetch(`/api/weather?${params}`)
+        const data = await wRes.json()
+        if (!data.error) {
+          setWeather(data)
+          setTempLabel(`${data.current.temp}°C`)
+          setCondIcon(data.current.conditionIcon)
+        }
+      } catch {}
+    }
+    load()
+  }, [])
+
+  const notifications = buildNotifications(weather)
+  const unreadCount = notifications.filter((n) => n.unread).length
   const closeAll = () => {
     setShowNotif(false)
     setShowUser(false)
   }
 
-  // ── Derive display values from session ────
   const name =
     session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User"
   const email = session?.user?.email ?? ""
@@ -234,21 +325,27 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
 
   return (
     <>
+      {/* Backdrop to close dropdowns */}
       {(showNotif || showUser) && (
-        <div className="fixed inset-0 z-30" onClick={closeAll} />
+        <div
+          className="fixed inset-0"
+          style={{ zIndex: 9998 }}
+          onClick={closeAll}
+        />
       )}
 
       <header
-        className="fixed top-0 right-0 z-30 flex items-center justify-between h-16 px-6"
+        className="fixed top-0 right-0 flex items-center justify-between h-16 px-6"
         style={{
           left: sidebarWidth,
           background: "rgba(6,13,31,0.9)",
           borderBottom: "1px solid rgba(255,255,255,0.07)",
           backdropFilter: "blur(12px)",
           transition: "left 0.3s ease-in-out",
+          zIndex: 9997, // ← above Leaflet (z-index 400–1000) and map controls
         }}
       >
-        {/* ── Left — Page title ─────────────── */}
+        {/* Left — page title */}
         <div>
           <h1
             className="font-bold text-slate-100 leading-tight text-base"
@@ -261,9 +358,9 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
           )}
         </div>
 
-        {/* ── Right — Actions ───────────────── */}
+        {/* Right — pills + actions */}
         <div className="flex items-center gap-2">
-          {/* Location pill */}
+          {/* Location pill — real data */}
           <div
             className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs text-slate-400"
             style={{
@@ -272,20 +369,20 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
             }}
           >
             <span className="text-sm">📍</span>
-            <span>Negombo, LK</span>
+            <span>{locationLabel}</span>
           </div>
 
-          {/* Temp pill */}
+          {/* Temp pill — real data */}
           <div
             className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                       text-xs font-semibold text-slate-200"
+                          text-xs font-semibold text-slate-200"
             style={{
               background: "rgba(59,130,246,0.08)",
               border: "1px solid rgba(59,130,246,0.15)",
             }}
           >
-            <span>⛅</span>
-            <span>34°C</span>
+            <span>{condIcon}</span>
+            <span>{tempLabel}</span>
           </div>
 
           {/* Notifications */}
@@ -307,7 +404,7 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
               {unreadCount > 0 && (
                 <span
                   className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full
-                             flex items-center justify-center text-[10px] font-bold text-white"
+                                 flex items-center justify-center text-[10px] font-bold text-white"
                   style={{
                     background: "#3b82f6",
                     boxShadow: "0 0 6px rgba(59,130,246,0.6)",
@@ -317,7 +414,12 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
                 </span>
               )}
             </button>
-            {showNotif && <NotificationDropdown onClose={closeAll} />}
+            {showNotif && (
+              <NotificationDropdown
+                onClose={closeAll}
+                notifications={notifications}
+              />
+            )}
           </div>
 
           {/* User avatar */}
