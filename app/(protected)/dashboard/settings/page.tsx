@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useToast } from "@/context/ToastContext"
+import { useTheme } from "@/context/ThemeContext"
 
 // ── Types ──────────────────────────────────────
 interface UserSettings {
@@ -149,7 +150,7 @@ export default function SettingsPage() {
   const [name, setName] = useState("")
   const [tempUnit, setTempUnit] = useState("C")
   const [windUnit, setWindUnit] = useState("kmh")
-  const [theme, setTheme] = useState("dark")
+  const { theme, setTheme } = useTheme()
   const [language, setLanguage] = useState("en")
   const [notifications, setNotifications] = useState(true)
 
@@ -227,7 +228,7 @@ export default function SettingsPage() {
         if (data.settings) {
           setTempUnit(data.settings.tempUnit ?? "C")
           setWindUnit(data.settings.windUnit ?? "kmh")
-          setTheme(data.settings.theme ?? "dark")
+          setTheme((data.settings.theme ?? "dark") as any)
           setLanguage(data.settings.language ?? "en")
           setNotifications(data.settings.notifications ?? true)
           setDefaultCity(data.settings.defaultCity ?? "")
@@ -566,28 +567,24 @@ export default function SettingsPage() {
                   options={WIND_UNITS}
                 />
               </SettingRow>
+              {/* Theme toggle — hidden for now, re-enable when light mode is ready
               <SettingRow label="Theme" description="App color theme">
-                <Select
-                  value={theme}
-                  onChange={(v) => {
-                    setTheme(v)
-                    save({ theme: v })
-                  }}
-                  options={THEMES}
-                />
+                <Select value={theme} onChange={v => { setTheme(v as any); save({ theme: v }) }} options={THEMES} />
               </SettingRow>
+              */}
               <SettingRow
                 label="Language"
                 description="Display language for the app"
               >
-                <Select
-                  value={language}
-                  onChange={(v) => {
-                    setLanguage(v)
-                    save({ language: v })
-                  }}
-                  options={LANGUAGES}
-                />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">English</span>
+                  <span
+                    className="px-2 py-0.5 rounded-full text-[11px] font-semibold
+                                   text-amber-400 bg-amber-500/10 border border-amber-500/20"
+                  >
+                    Coming soon
+                  </span>
+                </div>
               </SettingRow>
             </div>
           )}

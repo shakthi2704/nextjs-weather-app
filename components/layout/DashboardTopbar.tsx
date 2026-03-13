@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
+import { useSettings } from "@/context/SettingsContext"
 
 const PAGE_TITLES: Record<string, { title: string; desc: string }> = {
   "/dashboard": { title: "Overview", desc: "Your weather at a glance" },
@@ -45,7 +46,7 @@ function buildNotifications(
       id: 1,
       icon: "💨",
       title: "Wind Advisory",
-      desc: `Strong winds at ${windSpeed} km/h — take care outdoors.`,
+      desc: `Strong winds at ${fmtWind(windSpeed)} — take care outdoors.`,
       time: "Now",
       unread: true,
     })
@@ -55,7 +56,7 @@ function buildNotifications(
       id: 2,
       icon: "🌡️",
       title: "Heat Alert",
-      desc: `Feels like ${feelsLike}°C — stay hydrated and avoid midday sun.`,
+      desc: `Feels like ${fmtTemp(feelsLike)} — stay hydrated and avoid midday sun.`,
       time: "Now",
       unread: true,
     })
@@ -100,7 +101,7 @@ function buildNotifications(
       id: 6,
       icon: "✅",
       title: "All clear",
-      desc: `${conditionText} with ${temp}°C — good conditions outside.`,
+      desc: `${conditionText} with ${fmtTemp(temp)} — good conditions outside.`,
       time: "Now",
       unread: false,
     })
@@ -270,12 +271,13 @@ const UserDropdown = ({
 const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const { fmtTemp, fmtWind } = useSettings()
   const page = PAGE_TITLES[pathname] ?? { title: "Dashboard", desc: "" }
 
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
   const [locationLabel, setLocationLabel] = useState("Locating…")
-  const [tempLabel, setTempLabel] = useState("…°C")
+  const [tempLabel, setTempLabel] = useState("…°")
   const [condIcon, setCondIcon] = useState("⛅")
   const [weather, setWeather] = useState<any>(null)
 
@@ -298,7 +300,7 @@ const DashboardTopbar = ({ sidebarWidth = 260 }: { sidebarWidth?: number }) => {
         const data = await wRes.json()
         if (!data.error) {
           setWeather(data)
-          setTempLabel(`${data.current.temp}°C`)
+          setTempLabel(fmtTemp(data.current.temp))
           setCondIcon(data.current.conditionIcon)
         }
       } catch {}
