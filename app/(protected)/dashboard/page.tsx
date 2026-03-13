@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import type { WeatherData } from "@/types"
+import { useSettings } from "@/context/SettingsContext"
 
 // ── Weather condition → hero gradient ─────────
 const WEATHER_GRADIENTS: Record<string, string> = {
@@ -156,6 +157,7 @@ const MOON = getMoonPhase()
 
 // ── Page ───────────────────────────────────────
 export default function DashboardPage() {
+  const { fmtTemp, fmtWind } = useSettings()
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -287,7 +289,7 @@ export default function DashboardPage() {
                   letterSpacing: -5,
                 }}
               >
-                {current.temp}°
+                {fmtTemp(current.temp, false)}
               </span>
               <div className="pb-3">
                 <p className="text-5xl mb-2">{current.conditionIcon}</p>
@@ -296,13 +298,13 @@ export default function DashboardPage() {
                     className="px-2 py-0.5 rounded-lg text-xs font-semibold
                                    bg-red-500/10 text-red-400 border border-red-500/20"
                   >
-                    ↑ {current.tempMax}°
+                    ↑ {fmtTemp(current.tempMax, false)}
                   </span>
                   <span
                     className="px-2 py-0.5 rounded-lg text-xs font-semibold
                                    bg-blue-500/10 text-blue-400 border border-blue-500/20"
                   >
-                    ↓ {current.tempMin}°
+                    ↓ {fmtTemp(current.tempMin, false)}
                   </span>
                 </div>
               </div>
@@ -314,13 +316,14 @@ export default function DashboardPage() {
               {current.conditionText}
             </p>
             <p className="text-sm text-slate-400 mt-1">
-              Feels like {current.feelsLike}°C · Humidity {current.humidity}%
+              Feels like {fmtTemp(current.feelsLike)} · Humidity{" "}
+              {current.humidity}%
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2.5">
             {[
-              { icon: "💨", label: "Wind", value: `${current.windSpeed} km/h` },
+              { icon: "💨", label: "Wind", value: fmtWind(current.windSpeed) },
               {
                 icon: "☀️",
                 label: "UV Index",
@@ -334,7 +337,7 @@ export default function DashboardPage() {
               {
                 icon: "💧",
                 label: "Dew Point",
-                value: `${current.dewPoint}°C`,
+                value: fmtTemp(current.dewPoint),
               },
               {
                 icon: "🌅",
@@ -380,7 +383,7 @@ export default function DashboardPage() {
               {
                 icon: "💨",
                 label: "Wind",
-                value: `${current.windSpeed} km/h`,
+                value: fmtWind(current.windSpeed),
                 sub: `${current.windDir} · Gusts ${current.windGust}`,
               },
               {
@@ -542,9 +545,11 @@ export default function DashboardPage() {
                     className="text-xs font-bold text-slate-100"
                     style={{ fontFamily: "var(--font-d)" }}
                   >
-                    {d.tempMax}°
+                    {fmtTemp(d.tempMax, false)}
                   </span>
-                  <span className="text-xs text-slate-500">{d.tempMin}°</span>
+                  <span className="text-xs text-slate-500">
+                    {fmtTemp(d.tempMin, false)}
+                  </span>
                 </div>
               </div>
             ))}
@@ -577,7 +582,7 @@ export default function DashboardPage() {
                 className="text-sm font-bold text-slate-100"
                 style={{ fontFamily: "var(--font-d)" }}
               >
-                {h.temp}°
+                {fmtTemp(h.temp, false)}
               </p>
               <p
                 className={`text-[11px] ${h.precipProb >= 50 ? "text-blue-400" : "text-slate-600"}`}
@@ -625,7 +630,7 @@ export default function DashboardPage() {
                       icon: "💨",
                       color: "text-cyan-400",
                       bg: "bg-cyan-500/10 border-cyan-500/20",
-                      text: `Strong winds at ${current.windSpeed} km/h — secure loose outdoor items.`,
+                      text: `Strong winds at ${fmtWind(current.windSpeed)} — secure loose outdoor items.`,
                     },
                   ]
                 : []),

@@ -20,17 +20,9 @@ interface FavoriteWithWeather extends Favorite {
   error: boolean
 }
 
-// ── Suggested cities to add ────────────────────
-const SUGGESTIONS = [
-  { cityName: "London", country: "UK", lat: 51.51, lon: -0.13 },
-  { cityName: "New York", country: "US", lat: 40.71, lon: -74.01 },
-  { cityName: "Tokyo", country: "Japan", lat: 35.68, lon: 139.69 },
-  { cityName: "Dubai", country: "UAE", lat: 25.2, lon: 55.27 },
-  { cityName: "Sydney", country: "Australia", lat: -33.87, lon: 151.21 },
-  { cityName: "Paris", country: "France", lat: 48.85, lon: 2.35 },
-  { cityName: "Singapore", country: "Singapore", lat: 1.35, lon: 103.82 },
-  { cityName: "Mumbai", country: "India", lat: 19.08, lon: 72.88 },
-]
+import CitySearchBar, {
+  type CityResult,
+} from "@/components/layout/CitySearchBar"
 
 const getAqiColor = (aqi: number) =>
   aqi <= 50
@@ -52,7 +44,6 @@ export default function FavoritesPage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"grid" | "list">("grid")
   const [adding, setAdding] = useState<string | null>(null)
-  const [search, setSearch] = useState("")
 
   // ── Load favorites from DB ─────────────────
   useEffect(() => {
@@ -104,7 +95,16 @@ export default function FavoritesPage() {
   }, [])
 
   // ── Add favorite ───────────────────────────
-  const addFavorite = async (city: (typeof SUGGESTIONS)[0]) => {
+  const addFavorite = async (city: {
+    cityName: string
+    country: string
+    lat: number
+    lon: number
+  }) => {
+    if (favorites.some((f) => f.cityName === city.cityName)) {
+      toast(`${city.cityName} is already in your favorites`, "info")
+      return
+    }
     setAdding(city.cityName)
     try {
       const res = await fetch("/api/favorites", {
@@ -152,32 +152,26 @@ export default function FavoritesPage() {
   }
 
   // ── Remove favorite ────────────────────────
-  // const removeFavorite = async (id: string) => {
-  //   const res = await fetch(`/api/favorites?id=${id}`, { method: "DELETE" })
-  //   if (res.ok) {
-  //     setFavorites((prev) => prev.filter((f) => f.id !== id))
-  //   }
-  // }
-
-  const removeFavorite = async (id: string, cityName: string) => {
-    if (!confirm(`Remove ${cityName} from favourites?`)) return
-
+  const removeFavorite = async (id: string) => {
+    const fav = favorites.find((f) => f.id === id)
     const res = await fetch(`/api/favorites?id=${id}`, { method: "DELETE" })
     if (res.ok) {
-      toast(`${fav?.cityName ?? "City"} removed from favorites`, "info")
       setFavorites((prev) => prev.filter((f) => f.id !== id))
+      toast(`${fav?.cityName ?? "City"} removed from favorites`, "info")
     } else {
       toast("Failed to remove favorite", "error")
     }
   }
 
   const savedNames = favorites.map((f) => f.cityName)
-  const filteredSuggestions = SUGGESTIONS.filter(
-    (s) =>
-      !savedNames.includes(s.cityName) &&
-      (search === "" ||
-        s.cityName.toLowerCase().includes(search.toLowerCase())),
-  )
+
+  const handleCitySelect = (r: CityResult) =>
+    addFavorite({
+      cityName: r.name,
+      country: r.country,
+      lat: r.latitude,
+      lon: r.longitude,
+    })
 
   return (
     <div className="flex flex-col gap-4">
@@ -196,23 +190,11 @@ export default function FavoritesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Search */}
-          <div
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <span className="text-slate-500">🔍</span>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search cities…"
-              className="bg-transparent text-slate-300 placeholder-slate-600 outline-none text-sm w-32"
-            />
-          </div>
+          {/* City search — adds to favorites */}
+          <CitySearchBar
+            onSelect={handleCitySelect}
+            loading={adding !== null}
+          />
           {/* View toggle */}
           {["grid", "list"].map((v) => (
             <button
@@ -268,9 +250,9 @@ export default function FavoritesPage() {
             >
               {/* Remove button */}
               <button
-                onClick={() => removeFavorite(fav.id, fav.cityName)}
+                onClick={() => removeFavorite(fav.id)}
                 className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center
-                           text-slate-600 hover:text-red-600 hover:bg-red-500/10 transition-all
+                           text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all
                            opacity-0 group-hover:opacity-100 text-xs"
               >
                 ✕
@@ -289,7 +271,7 @@ export default function FavoritesPage() {
                 </div>
               ) : fav.weather ? (
                 <>
-                  <div className="flex items-start justify-between mt-6">
+                  <div className="flex items-start justify-between mb-3">
                     <div>
                       <p
                         className="text-sm font-bold text-slate-100"
@@ -456,7 +438,7 @@ export default function FavoritesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => removeFavorite(fav.id, fav.cityName)}
+                      onClick={() => removeFavorite(fav.id)}
                       className="text-slate-600 hover:text-red-400 transition-colors text-xs
                                  px-2 py-1 rounded-lg hover:bg-red-500/10"
                     >
@@ -469,51 +451,6 @@ export default function FavoritesPage() {
           </table>
         </div>
       )}
-
-      {/* ── Suggestions ───────────────────────── */}
-      <div
-        className="rounded-2xl p-5"
-        style={{
-          background: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}
-      >
-        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mb-3">
-          Suggested cities
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {filteredSuggestions.map((city) => (
-            <button
-              key={city.cityName}
-              onClick={() => addFavorite(city)}
-              disabled={adding === city.cityName}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
-                         transition-all duration-200 disabled:opacity-50 disabled:cursor-wait"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                color: "#94a3b8",
-              }}
-            >
-              {adding === city.cityName ? (
-                <span
-                  className="w-3 h-3 border border-blue-400/30 border-t-blue-400
-                                 rounded-full animate-spin"
-                />
-              ) : (
-                "＋"
-              )}
-              {city.cityName}
-              <span className="text-slate-600">{city.country}</span>
-            </button>
-          ))}
-          {filteredSuggestions.length === 0 && (
-            <p className="text-xs text-slate-600">
-              All suggested cities have been added!
-            </p>
-          )}
-        </div>
-      </div>
     </div>
   )
 }

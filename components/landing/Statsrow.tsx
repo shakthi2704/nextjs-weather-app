@@ -3,10 +3,10 @@
 import { useEffect, useRef } from "react"
 
 const STATS = [
-  { num: "2M+", label: "Cities covered" },
+  { num: "195+", label: "Countries covered" },
   { num: "99.9%", label: "Uptime reliability" },
-  { num: "10min", label: "Data refresh rate" },
-  { num: "16+", label: "Weather data points" },
+  { num: "15min", label: "Data refresh rate" },
+  { num: "20+", label: "Weather data points" },
 ]
 
 const StatsRow = () => {
@@ -36,7 +36,6 @@ const StatsRow = () => {
   return (
     <section className="relative z-10 px-12 pb-24">
       <div className="max-w-6xl mx-auto">
-        {/* Divider */}
         <div className="flex items-center gap-4 mb-0">
           <div className="flex-1 h-px bg-white/5" />
           <span className="text-xs text-slate-500 font-medium uppercase tracking-widest whitespace-nowrap">
@@ -44,9 +43,7 @@ const StatsRow = () => {
           </span>
           <div className="flex-1 h-px bg-white/5" />
         </div>
-
-        {/* Stats */}
-        <div className="flex justify-center text-white flex-wrap">
+        <div className="flex justify-center flex-wrap">
           {STATS.map((s, i) => (
             <div
               key={s.num}
@@ -54,11 +51,10 @@ const StatsRow = () => {
                 itemRefs.current[i] = el
               }}
               className="opacity-0 translate-y-5 transition-all duration-500
-                       flex-1 min-w-[160px] max-w-[220px]
-                       px-6 py-10 text-center
-                       border-r border-white/5 last:border-r-0"
+                         flex-1 min-w-[160px] max-w-[220px]
+                         px-6 py-10 text-center
+                         border-r border-white/5 last:border-r-0"
             >
-              {/* gradient-text class handles all the gradient + clip CSS */}
               <p
                 className="gradient-text font-extrabold mb-1.5 leading-none"
                 style={{
