@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useToast } from "@/context/ToastContext"
 
 // ── Types ──────────────────────────────────────
 interface UserSettings {
@@ -139,6 +140,7 @@ export default function SettingsPage() {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const toast = useToast()
   const [saved, setSaved] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [editingPass, setEditingPass] = useState(false)
@@ -163,6 +165,13 @@ export default function SettingsPage() {
   const [currentPass, setCurrentPass] = useState("")
   const [newPass, setNewPass] = useState("")
   const [confirmPass, setConfirmPass] = useState("")
+  const [passError, setPassError] = useState("")
+  const [savingPass, setSavingPass] = useState(false)
+
+  // Delete account
+  const [showDelete, setShowDelete] = useState(false)
+  const [deletePass, setDeletePass] = useState("")
+  const [deleting, setDeleting] = useState(false)
 
   // ── Close dropdown on outside click ───────
   useEffect(() => {
@@ -243,9 +252,13 @@ export default function SettingsPage() {
       })
       if (res.ok) {
         setSaved(true)
+        toast("Settings saved!", "success")
         setTimeout(() => setSaved(false), 2500)
+      } else {
+        toast("Failed to save settings", "error")
       }
     } catch {
+      toast("Something went wrong", "error")
     } finally {
       setSaving(false)
     }
@@ -267,7 +280,6 @@ export default function SettingsPage() {
   // ── Auto-detect location ───────────────────
   const detectLocation = async () => {
     try {
-      // Temporarily clear saved default so IP is used
       const res = await fetch("/api/location")
       const data = await res.json()
       setDefaultCity(data.city ?? "")
@@ -278,6 +290,61 @@ export default function SettingsPage() {
         defaultLon: data.lon,
       })
     } catch {}
+  }
+
+  // ── Change password ────────────────────────
+  const changePassword = async () => {
+    setPassError("")
+    setSavingPass(true)
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: currentPass,
+          newPassword: newPass,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPassError(data.error ?? "Failed to update password")
+        toast(data.error ?? "Failed to update password", "error")
+      } else {
+        toast("Password updated successfully!", "success")
+        setEditingPass(false)
+        setCurrentPass("")
+        setNewPass("")
+        setConfirmPass("")
+      }
+    } catch {
+      setPassError("Something went wrong")
+      toast("Something went wrong", "error")
+    } finally {
+      setSavingPass(false)
+    }
+  }
+
+  // ── Delete account ─────────────────────────
+  const deleteAccount = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch("/api/auth/delete-account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePass }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast(data.error ?? "Failed to delete account", "error")
+      } else {
+        toast("Account deleted. Redirecting…", "info")
+        setTimeout(() => (window.location.href = "/"), 1500)
+      }
+    } catch {
+      toast("Something went wrong", "error")
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (loading)
@@ -697,6 +764,10 @@ export default function SettingsPage() {
                       label: "New password",
                       value: newPass,
                       setter: setNewPass,
+                      hint:
+                        newPass.length > 0 && newPass.length < 8
+                          ? "Min. 8 characters"
+                          : "",
                     },
                     {
                       label: "Confirm password",
@@ -711,32 +782,52 @@ export default function SettingsPage() {
                       <input
                         type="password"
                         value={f.value}
-                        onChange={(e) => f.setter(e.target.value)}
+                        onChange={(e) => {
+                          f.setter(e.target.value)
+                          setPassError("")
+                        }}
                         className="w-full px-3 py-2 rounded-xl text-sm text-slate-200 outline-none"
                         style={{
                           background: "rgba(255,255,255,0.05)",
                           border: "1px solid rgba(255,255,255,0.1)",
                         }}
                       />
+                      {"hint" in f && f.hint && (
+                        <p className="text-[11px] text-amber-400 mt-1">
+                          {f.hint}
+                        </p>
+                      )}
                     </div>
                   ))}
-                  <button
-                    className="w-full py-2 rounded-xl text-sm font-semibold text-white mt-1
-                               transition-all disabled:opacity-50"
-                    style={{
-                      background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-                    }}
-                    disabled={
-                      !currentPass || !newPass || newPass !== confirmPass
-                    }
-                  >
-                    Update password
-                  </button>
+
+                  {/* Mismatch warning */}
                   {newPass && confirmPass && newPass !== confirmPass && (
                     <p className="text-xs text-red-400">
                       Passwords do not match
                     </p>
                   )}
+
+                  {/* Server error */}
+                  {passError && (
+                    <p className="text-xs text-red-400">{passError}</p>
+                  )}
+
+                  <button
+                    onClick={changePassword}
+                    disabled={
+                      savingPass ||
+                      !currentPass ||
+                      newPass.length < 8 ||
+                      newPass !== confirmPass
+                    }
+                    className="w-full py-2 rounded-xl text-sm font-semibold text-white mt-1
+                               transition-all disabled:opacity-40"
+                    style={{
+                      background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                    }}
+                  >
+                    {savingPass ? "Updating…" : "Update password"}
+                  </button>
                 </div>
               )}
 
@@ -748,20 +839,71 @@ export default function SettingsPage() {
                 <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">
                   Danger zone
                 </p>
-                <button
-                  onClick={() =>
-                    confirm("Are you sure? This cannot be undone.") &&
-                    alert("Account deletion coming soon.")
-                  }
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-red-400
-                             transition-all hover:bg-red-500/20"
-                  style={{
-                    background: "rgba(239,68,68,0.08)",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                  }}
-                >
-                  Delete account
-                </button>
+
+                {!showDelete ? (
+                  <button
+                    onClick={() => setShowDelete(true)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-red-400
+                               transition-all hover:bg-red-500/20"
+                    style={{
+                      background: "rgba(239,68,68,0.08)",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                    }}
+                  >
+                    Delete account
+                  </button>
+                ) : (
+                  <div
+                    className="flex flex-col gap-3 p-4 rounded-xl"
+                    style={{
+                      background: "rgba(239,68,68,0.05)",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                    }}
+                  >
+                    <p className="text-xs text-red-300 font-medium">
+                      ⚠️ This will permanently delete your account, all
+                      favorites, and settings. This cannot be undone.
+                    </p>
+                    <div>
+                      <label className="text-xs text-slate-500 block mb-1">
+                        Enter your password to confirm
+                      </label>
+                      <input
+                        type="password"
+                        value={deletePass}
+                        onChange={(e) => setDeletePass(e.target.value)}
+                        placeholder="Your password"
+                        className="w-full px-3 py-2 rounded-xl text-sm text-slate-200 outline-none"
+                        style={{
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(239,68,68,0.3)",
+                        }}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={deleteAccount}
+                        disabled={!deletePass || deleting}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white
+                                   transition-all disabled:opacity-40"
+                        style={{ background: "#ef4444" }}
+                      >
+                        {deleting ? "Deleting…" : "Yes, delete my account"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowDelete(false)
+                          setDeletePass("")
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400
+                                   hover:text-slate-200 transition-all"
+                        style={{ background: "rgba(255,255,255,0.05)" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

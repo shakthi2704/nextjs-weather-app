@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 
 // ── Nav items ──────────────────────────────────
 const NAV_ITEMS = [
@@ -92,6 +93,17 @@ interface SidebarProps {
 
 const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
   const pathname = usePathname()
+  const { data: session } = useSession()
+
+  const name =
+    session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "User"
+  const email = session?.user?.email ?? ""
+  const initials = name
+    .split(" ")
+    .map((w: string) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 
   const isActive = (href: string) =>
     href === "/dashboard"
@@ -109,6 +121,7 @@ const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
         backdropFilter: "blur(12px)",
       }}
     >
+      {/* ── Logo ────────────────────────────── */}
       <div
         className="flex items-center h-16 px-4 shrink-0"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
@@ -134,6 +147,7 @@ const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
         </Link>
       </div>
 
+      {/* ── Main nav ────────────────────────── */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 flex flex-col gap-1">
         {NAV_ITEMS.map((item) => (
           <NavLink
@@ -145,6 +159,7 @@ const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
         ))}
       </nav>
 
+      {/* ── Bottom section ──────────────────── */}
       <div
         className="px-3 py-4 flex flex-col gap-1"
         style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
@@ -159,12 +174,14 @@ const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
           />
         ))}
 
+        {/* User info */}
         <div
           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mt-1
                       transition-all duration-200
                       ${collapsed ? "justify-center" : ""}`}
           style={{ background: "rgba(255,255,255,0.03)" }}
         >
+          {/* Avatar */}
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center
                        text-sm font-bold text-white shrink-0"
@@ -173,22 +190,35 @@ const DashboardSidebar = ({ collapsed, onCollapse }: SidebarProps) => {
               boxShadow: "0 0 10px rgba(59,130,246,0.25)",
             }}
           >
-            J
+            {initials}
           </div>
 
+          {/* Name + email + sign out */}
           <div
-            className={`min-w-0 transition-all duration-200 overflow-hidden
+            className={`min-w-0 transition-all duration-200 overflow-hidden flex-1
                         ${collapsed ? "w-0 opacity-0" : "w-auto opacity-100"}`}
           >
             <p className="text-xs font-semibold text-slate-200 truncate">
-              John Smith
+              {name}
             </p>
-            <p className="text-[11px] text-slate-500 truncate">
-              john@example.com
-            </p>
+            <p className="text-[11px] text-slate-500 truncate">{email}</p>
           </div>
+
+          {/* Sign out button */}
+          {!collapsed && (
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="Sign out"
+              className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center
+                         text-slate-600 hover:text-red-400 hover:bg-red-500/10
+                         transition-all duration-200"
+            >
+              →
+            </button>
+          )}
         </div>
 
+        {/* Collapse toggle */}
         <button
           onClick={() => onCollapse(!collapsed)}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mt-1
